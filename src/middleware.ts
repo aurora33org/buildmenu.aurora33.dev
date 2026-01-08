@@ -12,9 +12,10 @@ export function middleware(request: NextRequest) {
   const isPublicMenuRoute = /^\/[a-z0-9\-]+$/i.test(pathname); // /:slug format
   const isLoginRoute = pathname === '/login';
   const isApiPublicRoute = pathname.startsWith('/api/public');
+  const isApiAuthRoute = pathname.startsWith('/api/auth'); // Auth routes should be accessible
 
   // Allow public routes
-  if (isPublicMenuRoute || isLoginRoute || isApiPublicRoute) {
+  if (isPublicMenuRoute || isLoginRoute || isApiPublicRoute || isApiAuthRoute) {
     return NextResponse.next();
   }
 

@@ -9,7 +9,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, password } = body;
 
+    console.log('[LOGIN] Attempting login for:', email);
+
     if (!email || !password) {
+      console.log('[LOGIN] Missing email or password');
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
@@ -25,7 +28,10 @@ export async function POST(request: NextRequest) {
         AND deleted_at IS NULL
     `).get(email) as User | undefined;
 
+    console.log('[LOGIN] User found:', user ? 'YES' : 'NO');
+
     if (!user) {
+      console.log('[LOGIN] User not found in database');
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -33,14 +39,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password
+    console.log('[LOGIN] Verifying password...');
     const isValidPassword = await verifyPassword(password, user.password_hash);
+    console.log('[LOGIN] Password valid:', isValidPassword);
 
     if (!isValidPassword) {
+      console.log('[LOGIN] Invalid password');
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
+
+    console.log('[LOGIN] Login successful for:', email);
 
     // Create session
     const { token } = createSession(user.id);
