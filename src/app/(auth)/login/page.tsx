@@ -34,11 +34,16 @@ export default function LoginPage() {
         throw new Error(data.error || 'Login failed');
       }
 
-      // Redirect based on role
+      // Redirect based on role and onboarding status
       if (data.user.role === 'super_admin') {
         router.push('/admin/dashboard');
       } else {
-        router.push('/dashboard');
+        // Tenant user - check if onboarding is complete
+        if (!data.user.restaurant_id) {
+          router.push('/onboarding');
+        } else {
+          router.push('/dashboard');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

@@ -14,6 +14,10 @@ export function middleware(request: NextRequest) {
   const isApiPublicRoute = pathname.startsWith('/api/public');
   const isApiAuthRoute = pathname.startsWith('/api/auth'); // Auth routes should be accessible
 
+  // Onboarding routes (require auth but special handling)
+  const isOnboardingRoute = pathname === '/onboarding';
+  const isApiOnboardingRoute = pathname.startsWith('/api/onboarding');
+
   // Allow public routes
   if (isPublicMenuRoute || isLoginRoute || isApiPublicRoute || isApiAuthRoute) {
     return NextResponse.next();
@@ -28,8 +32,8 @@ export function middleware(request: NextRequest) {
   const isApiRoute = pathname.startsWith('/api') && !isApiPublicRoute;
 
   // Redirect to login if not authenticated and trying to access protected route
-  if (!hasSession && (isAdminRoute || isTenantRoute || isApiRoute)) {
-    if (isApiRoute) {
+  if (!hasSession && (isAdminRoute || isTenantRoute || isOnboardingRoute || isApiRoute)) {
+    if (isApiRoute || isApiOnboardingRoute) {
       return new NextResponse(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { 'content-type': 'application/json' } }
@@ -38,8 +42,11 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Allow authenticated users to access - RBAC will be checked in each page/API route
-  // This keeps middleware edge-compatible
+  // Allow authenticated users to access onboarding routes
+  // Note: Onboarding validation (checking if restaurant_id is null) happens in:
+  // - /app/(auth)/login/page.tsx (redirects to /onboarding if needed)
+  // - /app/(tenant)/* pages (redirects to /onboarding if needed)
+  // We can't do this check in middleware because it requires database access (not edge-compatible)
 
   return NextResponse.next();
 }
