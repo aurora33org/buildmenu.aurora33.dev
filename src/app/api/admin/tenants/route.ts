@@ -58,15 +58,27 @@ export async function POST(request: NextRequest) {
     const userId = randomUUID();
     const settingsId = randomUUID();
 
-    // Start transaction (SQLite doesn't have true transactions, but we'll do it sequentially)
-    try {
-      // 1. Create restaurant
+    // Use SQLite transaction with deferred foreign key checks
+    const createTenant = db.transaction(() => {
+      // 1. Create user FIRST (without restaurant_id to avoid FK constraint)
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, name, role, restaurant_id)
+        VALUES (?, ?, ?, ?, ?, NULL)
+      `).run(
+        userId,
+        data.userEmail,
+        passwordHash,
+        data.userName,
+        'tenant_user'
+      );
+
+      // 2. Create restaurant (now user exists for owner_id)
       db.prepare(`
         INSERT INTO restaurants (id, owner_id, name, slug, description, contact_email, contact_phone, address)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         restaurantId,
-        userId, // owner_id will reference the user we're about to create
+        userId,
         data.restaurantName,
         data.slug,
         data.description || null,
@@ -75,20 +87,12 @@ export async function POST(request: NextRequest) {
         data.address || null
       );
 
-      // 2. Create user
+      // 3. Update user with restaurant_id
       db.prepare(`
-        INSERT INTO users (id, email, password_hash, name, role, restaurant_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(
-        userId,
-        data.userEmail,
-        passwordHash,
-        data.userName,
-        'tenant_user',
-        restaurantId
-      );
+        UPDATE users SET restaurant_id = ? WHERE id = ?
+      `).run(restaurantId, userId);
 
-      // 3. Create restaurant settings
+      // 4. Create restaurant settings
       db.prepare(`
         INSERT INTO restaurant_settings (id, restaurant_id, template_id)
         VALUES (?, ?, ?)
@@ -97,6 +101,11 @@ export async function POST(request: NextRequest) {
         restaurantId,
         data.templateId
       );
+    });
+
+    // Execute transaction
+    try {
+      createTenant();
 
       // Fetch created tenant
       const tenant = db.prepare(`
@@ -127,13 +136,7 @@ export async function POST(request: NextRequest) {
       }, { status: 201 });
 
     } catch (error) {
-      // Rollback (delete what was created)
       console.error('[TENANT CREATION ERROR]', error);
-
-      db.prepare('DELETE FROM restaurant_settings WHERE restaurant_id = ?').run(restaurantId);
-      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-      db.prepare('DELETE FROM restaurants WHERE id = ?').run(restaurantId);
-
       throw error;
     }
 

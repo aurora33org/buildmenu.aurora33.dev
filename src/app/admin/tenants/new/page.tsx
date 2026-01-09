@@ -128,7 +128,7 @@ export default function NewTenantPage() {
                   required
                   disabled={loading}
                   placeholder="el-buen-sabor"
-                  pattern="[a-z0-9-]+"
+                  pattern="[a-z0-9\-]+"
                 />
                 <p className="text-xs text-muted-foreground">
                   URL pública: /{formData.slug || 'slug'}
