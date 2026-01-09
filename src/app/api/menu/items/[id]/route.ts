@@ -5,7 +5,7 @@ import { updateMenuItemSchema } from '@/lib/validations/menu.schema';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const cookieHeader = request.headers.get('cookie');
@@ -18,7 +18,7 @@ export async function PATCH(
       );
     }
 
-    const itemId = params.id;
+    const { id: itemId } = await params;
     const db = getDatabase();
 
     // Verify item belongs to user's restaurant
@@ -112,7 +112,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const cookieHeader = request.headers.get('cookie');
@@ -125,7 +125,7 @@ export async function DELETE(
       );
     }
 
-    const itemId = params.id;
+    const { id: itemId } = await params;
     const db = getDatabase();
 
     // Verify item belongs to user's restaurant

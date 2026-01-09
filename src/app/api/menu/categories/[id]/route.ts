@@ -5,7 +5,7 @@ import { updateCategorySchema } from '@/lib/validations/menu.schema';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const cookieHeader = request.headers.get('cookie');
@@ -18,7 +18,7 @@ export async function PATCH(
       );
     }
 
-    const categoryId = params.id;
+    const { id: categoryId } = await params;
     const db = getDatabase();
 
     // Verify category belongs to user's restaurant
@@ -105,7 +105,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const cookieHeader = request.headers.get('cookie');
@@ -118,7 +118,7 @@ export async function DELETE(
       );
     }
 
-    const categoryId = params.id;
+    const { id: categoryId } = await params;
     const db = getDatabase();
 
     // Verify category belongs to user's restaurant
