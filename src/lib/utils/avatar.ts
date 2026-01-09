@@ -51,7 +51,7 @@ export function getAvatarColor(name: string): string {
   }
 
   const index = Math.abs(hash) % colors.length;
-  return colors[index];
+  return colors[index] || 'bg-blue-500';
 }
 
 /**
