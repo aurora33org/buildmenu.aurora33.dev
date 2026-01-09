@@ -23,3 +23,12 @@ export const createTenantSchema = z.object({
 });
 
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;
+
+// SIMPLIFIED SCHEMA: Only create user, NO restaurant (for new onboarding flow)
+export const createTenantSimpleSchema = z.object({
+  email: z.string().email('Email inválido'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
+  name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
+});
+
+export type CreateTenantSimpleInput = z.infer<typeof createTenantSimpleSchema>;
