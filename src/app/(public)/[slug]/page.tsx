@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import { getDatabase } from '@/lib/db/schema';
 import { ClassicTemplate } from '@/components/public/templates/ClassicTemplate';
+import { trackBandwidth } from '@/lib/analytics/bandwidth';
 
 interface MenuItem {
   id: string;
@@ -145,11 +146,21 @@ async function getMenuData(slug: string) {
     VALUES (?, ?, CURRENT_TIMESTAMP)
   `).run(crypto.randomUUID(), restaurant.id);
 
-  return {
+  // Calculate approximate page size for bandwidth tracking
+  const pageData = {
     restaurant,
     settings,
     categories: categoriesWithItems,
   };
+
+  const approximateBytes = JSON.stringify(pageData).length;
+
+  // Track bandwidth asynchronously (non-blocking)
+  trackBandwidth(restaurant.id, approximateBytes, true).catch(err => {
+    console.error('[BANDWIDTH TRACKING ERROR]', err);
+  });
+
+  return pageData;
 }
 
 export default async function PublicMenuPage({
