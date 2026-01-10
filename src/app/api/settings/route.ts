@@ -51,8 +51,8 @@ export async function PUT(request: NextRequest) {
       accent_color,
       background_color,
       text_color,
-      heading_font,
-      body_font,
+      font_heading,
+      font_body,
     } = body;
 
     const db = getDatabase();
@@ -66,8 +66,8 @@ export async function PUT(request: NextRequest) {
         accent_color = ?,
         background_color = ?,
         text_color = ?,
-        heading_font = ?,
-        body_font = ?,
+        font_heading = ?,
+        font_body = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE restaurant_id = ?
     `).run(
@@ -77,8 +77,8 @@ export async function PUT(request: NextRequest) {
       accent_color,
       background_color,
       text_color,
-      heading_font,
-      body_font,
+      font_heading,
+      font_body,
       session.restaurant_id
     );
 

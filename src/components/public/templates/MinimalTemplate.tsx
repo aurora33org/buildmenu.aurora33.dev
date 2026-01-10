@@ -22,8 +22,8 @@ interface RestaurantSettings {
   accent_color: string | null;
   background_color: string | null;
   text_color: string | null;
-  heading_font: string | null;
-  body_font: string | null;
+  font_heading: string | null;
+  font_body: string | null;
 }
 
 interface MinimalTemplateProps {
@@ -41,8 +41,8 @@ export function MinimalTemplate({
   const secondaryColor = settings.secondary_color || '#666666';
   const backgroundColor = settings.background_color || '#ffffff';
   const textColor = settings.text_color || '#1a1a1a';
-  const headingFont = settings.heading_font || 'Inter, sans-serif';
-  const bodyFont = settings.body_font || 'Inter, sans-serif';
+  const headingFont = settings.font_heading || 'Inter, sans-serif';
+  const bodyFont = settings.font_body || 'Inter, sans-serif';
 
   const visibleCategories = categories.filter(cat => cat.is_visible);
 

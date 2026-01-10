@@ -36,8 +36,8 @@ interface RestaurantSettings {
   accent_color: string | null;
   background_color: string | null;
   text_color: string | null;
-  heading_font: string | null;
-  body_font: string | null;
+  font_heading: string | null;
+  font_body: string | null;
 }
 
 interface Restaurant {

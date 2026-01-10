@@ -12,8 +12,8 @@ interface Settings {
   accent_color: string | null;
   background_color: string | null;
   text_color: string | null;
-  heading_font: string | null;
-  body_font: string | null;
+  font_heading: string | null;
+  font_body: string | null;
 }
 
 const GOOGLE_FONTS = [
@@ -46,8 +46,8 @@ export default function SettingsPage() {
     accent_color: '#f59e0b',
     background_color: '#ffffff',
     text_color: '#1f2937',
-    heading_font: 'Inter',
-    body_font: 'Inter',
+    font_heading: 'Inter',
+    font_body: 'Inter',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -71,8 +71,8 @@ export default function SettingsPage() {
           accent_color: data.settings.accent_color || '#f59e0b',
           background_color: data.settings.background_color || '#ffffff',
           text_color: data.settings.text_color || '#1f2937',
-          heading_font: data.settings.heading_font || 'Inter',
-          body_font: data.settings.body_font || 'Inter',
+          font_heading: data.settings.font_heading || 'Inter',
+          font_body: data.settings.font_body || 'Inter',
         });
       }
     } catch (error) {
@@ -288,10 +288,10 @@ export default function SettingsPage() {
               <Label htmlFor="headingFont">Fuente de Títulos</Label>
               <select
                 id="headingFont"
-                value={settings.heading_font || 'Inter'}
-                onChange={(e) => setSettings({ ...settings, heading_font: e.target.value })}
+                value={settings.font_heading || 'Inter'}
+                onChange={(e) => setSettings({ ...settings, font_heading: e.target.value })}
                 className="w-full h-10 px-3 border rounded"
-                style={{ fontFamily: settings.heading_font || 'Inter' }}
+                style={{ fontFamily: settings.font_heading || 'Inter' }}
               >
                 {GOOGLE_FONTS.map((font) => (
                   <option key={font} value={font} style={{ fontFamily: font }}>
@@ -305,10 +305,10 @@ export default function SettingsPage() {
               <Label htmlFor="bodyFont">Fuente de Cuerpo</Label>
               <select
                 id="bodyFont"
-                value={settings.body_font || 'Inter'}
-                onChange={(e) => setSettings({ ...settings, body_font: e.target.value })}
+                value={settings.font_body || 'Inter'}
+                onChange={(e) => setSettings({ ...settings, font_body: e.target.value })}
                 className="w-full h-10 px-3 border rounded"
-                style={{ fontFamily: settings.body_font || 'Inter' }}
+                style={{ fontFamily: settings.font_body || 'Inter' }}
               >
                 {GOOGLE_FONTS.map((font) => (
                   <option key={font} value={font} style={{ fontFamily: font }}>
@@ -327,7 +327,7 @@ export default function SettingsPage() {
             <h3
               className="text-2xl font-bold mb-2"
               style={{
-                fontFamily: settings.heading_font || 'Inter',
+                fontFamily: settings.font_heading || 'Inter',
                 color: settings.primary_color || '#2563eb',
               }}
             >
@@ -336,7 +336,7 @@ export default function SettingsPage() {
             <p
               className="text-base"
               style={{
-                fontFamily: settings.body_font || 'Inter',
+                fontFamily: settings.font_body || 'Inter',
               }}
             >
               Este es un ejemplo de cómo se verá el texto del cuerpo en tu menú. Los colores y fuentes se aplicarán automáticamente.

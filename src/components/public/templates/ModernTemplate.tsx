@@ -22,8 +22,8 @@ interface RestaurantSettings {
   accent_color: string | null;
   background_color: string | null;
   text_color: string | null;
-  heading_font: string | null;
-  body_font: string | null;
+  font_heading: string | null;
+  font_body: string | null;
 }
 
 interface ModernTemplateProps {
@@ -42,8 +42,8 @@ export function ModernTemplate({
   const accentColor = settings.accent_color || '#f59e0b';
   const backgroundColor = settings.background_color || '#f8fafc';
   const textColor = settings.text_color || '#1e293b';
-  const headingFont = settings.heading_font || 'Poppins, sans-serif';
-  const bodyFont = settings.body_font || 'Inter, sans-serif';
+  const headingFont = settings.font_heading || 'Poppins, sans-serif';
+  const bodyFont = settings.font_body || 'Inter, sans-serif';
 
   const visibleCategories = categories.filter(cat => cat.is_visible);
 
