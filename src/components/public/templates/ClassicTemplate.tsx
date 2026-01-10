@@ -24,8 +24,8 @@ interface RestaurantSettings {
   accent_color: string | null;
   background_color: string | null;
   text_color: string | null;
-  heading_font: string | null;
-  body_font: string | null;
+  font_heading: string | null;
+  font_body: string | null;
 }
 
 interface ClassicTemplateProps {
@@ -44,8 +44,8 @@ export function ClassicTemplate({
   const accentColor = settings.accent_color || '#8b7355';
   const backgroundColor = settings.background_color || '#ffffff';
   const textColor = settings.text_color || '#2d2d2d';
-  const headingFont = settings.heading_font || 'serif';
-  const bodyFont = settings.body_font || 'sans-serif';
+  const headingFont = settings.font_heading || 'serif';
+  const bodyFont = settings.font_body || 'sans-serif';
 
   const visibleCategories = categories.filter(cat => cat.is_visible);
 

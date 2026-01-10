@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import { getDatabase } from '@/lib/db/schema';
 import { ClassicTemplate } from '@/components/public/templates/ClassicTemplate';
+import { ModernTemplate } from '@/components/public/templates/ModernTemplate';
+import { MinimalTemplate } from '@/components/public/templates/MinimalTemplate';
 import { trackBandwidth } from '@/lib/analytics/bandwidth';
 
 interface MenuItem {
@@ -34,8 +36,8 @@ interface RestaurantSettings {
   accent_color: string | null;
   background_color: string | null;
   text_color: string | null;
-  heading_font: string | null;
-  body_font: string | null;
+  font_heading: string | null;
+  font_body: string | null;
 }
 
 interface Restaurant {
@@ -177,13 +179,25 @@ export default async function PublicMenuPage({
 
   const { restaurant, settings, categories } = data;
 
-  // For now, only Classic template is implemented
-  // Future: switch based on settings.template_id
-  return (
-    <ClassicTemplate
-      restaurantName={restaurant.name}
-      categories={categories}
-      settings={settings}
-    />
-  );
+  // Select template based on settings.template_id
+  const templateId = settings.template_id || 'classic';
+
+  const templateProps = {
+    restaurantName: restaurant.name,
+    categories,
+    settings,
+  };
+
+  switch (templateId) {
+    case 'modern':
+      return <ModernTemplate {...templateProps} />;
+    case 'minimal':
+      return <MinimalTemplate {...templateProps} />;
+    case 'elegant':
+      // Elegant template to be implemented in Phase 4
+      return <ClassicTemplate {...templateProps} />;
+    case 'classic':
+    default:
+      return <ClassicTemplate {...templateProps} />;
+  }
 }

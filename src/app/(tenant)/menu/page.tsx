@@ -6,6 +6,24 @@ import { Input } from '@/components/shared/ui/input';
 import { Label } from '@/components/shared/ui/label';
 import { Textarea } from '@/components/shared/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/shared/ui/card';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 
 interface Category {
   id: string;
@@ -28,27 +46,161 @@ interface MenuItem {
   category_name: string;
 }
 
+function SortableCategory({
+  category,
+  onAddItem,
+  onDeleteCategory,
+  children,
+}: {
+  category: Category;
+  onAddItem: () => void;
+  onDeleteCategory: () => void;
+  children: React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: category.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3 flex-1">
+              <button
+                className="mt-1 cursor-grab active:cursor-grabbing touch-none"
+                {...attributes}
+                {...listeners}
+              >
+                <GripVertical className="h-5 w-5 text-muted-foreground" />
+              </button>
+              <div className="flex-1">
+                <CardTitle>{category.name}</CardTitle>
+                {category.description && (
+                  <CardDescription className="mt-1">{category.description}</CardDescription>
+                )}
+                <p className="text-sm text-muted-foreground mt-2">
+                  {category.items_count} items
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={onAddItem}>
+                Agregar Item
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={onDeleteCategory}
+              >
+                Eliminar
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {children}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function SortableItem({
+  item,
+  onDelete,
+}: {
+  item: MenuItem;
+  onDelete: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-start justify-between p-3 border rounded-md bg-background"
+    >
+      <div className="flex items-start gap-3 flex-1">
+        <button
+          className="mt-1 cursor-grab active:cursor-grabbing touch-none"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </button>
+        <div className="flex-1">
+          <p className="font-medium">{item.name}</p>
+          {item.description && (
+            <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+          )}
+          {item.base_price !== null && (
+            <p className="text-sm font-medium mt-1">
+              ${item.base_price.toFixed(2)}
+            </p>
+          )}
+        </div>
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onDelete}
+      >
+        Eliminar
+      </Button>
+    </div>
+  );
+}
+
 export default function MenuEditorPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showItemForm, setShowItemForm] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // Category form state
   const [categoryForm, setCategoryForm] = useState({
     name: '',
     description: '',
   });
 
-  // Item form state
   const [itemForm, setItemForm] = useState({
     categoryId: '',
     name: '',
     description: '',
     basePrice: '',
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     fetchData();
@@ -143,8 +295,70 @@ export default function MenuEditorPage() {
     }
   };
 
+  const handleDragEndCategories = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = categories.findIndex((cat) => cat.id === active.id);
+      const newIndex = categories.findIndex((cat) => cat.id === over.id);
+
+      const newCategories = arrayMove(categories, oldIndex, newIndex);
+      setCategories(newCategories);
+
+      // Update server
+      try {
+        await fetch('/api/menu/categories/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            categoryIds: newCategories.map(cat => cat.id),
+          }),
+        });
+      } catch (error) {
+        console.error('Error reordering categories:', error);
+        // Revert on error
+        fetchData();
+      }
+    }
+  };
+
+  const handleDragEndItems = async (event: DragEndEvent, categoryId: string) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const categoryItems = getItemsByCategory(categoryId);
+      const oldIndex = categoryItems.findIndex((item) => item.id === active.id);
+      const newIndex = categoryItems.findIndex((item) => item.id === over.id);
+
+      const newItems = arrayMove(categoryItems, oldIndex, newIndex);
+
+      // Update local state
+      setItems((prevItems) => {
+        const otherItems = prevItems.filter(item => item.category_id !== categoryId);
+        return [...otherItems, ...newItems];
+      });
+
+      // Update server
+      try {
+        await fetch('/api/menu/items/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            categoryId,
+            itemIds: newItems.map(item => item.id),
+          }),
+        });
+      } catch (error) {
+        console.error('Error reordering items:', error);
+        // Revert on error
+        fetchData();
+      }
+    }
+  };
+
   const getItemsByCategory = (categoryId: string) => {
-    return items.filter(item => item.category_id === categoryId);
+    return items.filter(item => item.category_id === categoryId)
+      .sort((a, b) => a.display_order - b.display_order);
   };
 
   if (loading) {
@@ -161,7 +375,7 @@ export default function MenuEditorPage() {
         <div>
           <h1 className="text-3xl font-bold">Editor de Menú</h1>
           <p className="text-muted-foreground mt-2">
-            Gestiona las categorías y platillos de tu menú
+            Arrastra para reordenar categorías e items
           </p>
         </div>
         <Button onClick={() => setShowCategoryForm(true)}>
@@ -221,78 +435,57 @@ export default function MenuEditorPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {categories.map((category) => (
-            <Card key={category.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle>{category.name}</CardTitle>
-                    {category.description && (
-                      <CardDescription className="mt-1">{category.description}</CardDescription>
-                    )}
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {category.items_count} items
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEndCategories}
+        >
+          <SortableContext
+            items={categories.map(cat => cat.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-4">
+              {categories.map((category) => (
+                <SortableCategory
+                  key={category.id}
+                  category={category}
+                  onAddItem={() => {
+                    setItemForm(prev => ({ ...prev, categoryId: category.id }));
+                    setShowItemForm(true);
+                  }}
+                  onDeleteCategory={() => handleDeleteCategory(category.id)}
+                >
+                  {getItemsByCategory(category.id).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No hay items en esta categoría
                     </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setItemForm(prev => ({ ...prev, categoryId: category.id }));
-                        setShowItemForm(true);
-                      }}
+                  ) : (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={(event) => handleDragEndItems(event, category.id)}
                     >
-                      Agregar Item
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDeleteCategory(category.id)}
-                    >
-                      Eliminar
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {getItemsByCategory(category.id).length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No hay items en esta categoría
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {getItemsByCategory(category.id).map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex items-start justify-between p-3 border rounded-md"
+                      <SortableContext
+                        items={getItemsByCategory(category.id).map(item => item.id)}
+                        strategy={verticalListSortingStrategy}
                       >
-                        <div className="flex-1">
-                          <p className="font-medium">{item.name}</p>
-                          {item.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
-                          )}
-                          {item.base_price !== null && (
-                            <p className="text-sm font-medium mt-1">
-                              ${item.base_price.toFixed(2)}
-                            </p>
-                          )}
+                        <div className="space-y-2">
+                          {getItemsByCategory(category.id).map((item) => (
+                            <SortableItem
+                              key={item.id}
+                              item={item}
+                              onDelete={() => handleDeleteItem(item.id)}
+                            />
+                          ))}
                         </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteItem(item.id)}
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                      </SortableContext>
+                    </DndContext>
+                  )}
+                </SortableCategory>
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* Item Form Modal */}
