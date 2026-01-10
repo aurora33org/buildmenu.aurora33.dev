@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
 
     const db = getDatabase();
 
-    // Get all tenant users (with or without restaurant)
+    // Get all tenant users (with or without restaurant) with analytics
     const tenants = db.prepare(`
       SELECT
         u.id,
@@ -112,9 +112,13 @@ export async function GET(request: NextRequest) {
         r.is_active,
         r.onboarding_completed,
         r.paused_at,
+        r.paused_reason,
         rs.template_id,
         (SELECT COUNT(*) FROM categories WHERE restaurant_id = r.id AND deleted_at IS NULL) as categories_count,
-        (SELECT COUNT(*) FROM menu_items WHERE restaurant_id = r.id AND deleted_at IS NULL) as items_count
+        (SELECT COUNT(*) FROM menu_items WHERE restaurant_id = r.id AND deleted_at IS NULL) as items_count,
+        (SELECT COALESCE(SUM(page_views), 0) FROM usage_metrics WHERE restaurant_id = r.id) as total_views,
+        (SELECT COALESCE(SUM(page_views), 0) FROM usage_metrics WHERE restaurant_id = r.id AND date >= date('now', '-7 days')) as views_last_7_days,
+        (SELECT COALESCE(SUM(bandwidth_bytes), 0) FROM usage_metrics WHERE restaurant_id = r.id AND date >= date('now', '-30 days')) as bandwidth_30d
       FROM users u
       LEFT JOIN restaurants r ON r.id = u.restaurant_id
       LEFT JOIN restaurant_settings rs ON rs.restaurant_id = r.id
