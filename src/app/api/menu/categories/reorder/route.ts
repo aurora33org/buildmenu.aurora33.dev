@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 
 export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || !session.restaurant_id) {
+    if (!session || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -24,20 +24,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getDatabase();
-
-    // Update display_order for each category
-    const updateOrder = db.transaction(() => {
-      categoryIds.forEach((categoryId, index) => {
-        db.prepare(`
-          UPDATE categories
-          SET display_order = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND restaurant_id = ?
-        `).run(index, categoryId, session.restaurant_id);
-      });
-    });
-
-    updateOrder();
+    // Update display_order for each category in a transaction
+    await prisma.$transaction(
+      categoryIds.map((categoryId, index) =>
+        prisma.category.updateMany({
+          where: {
+            id: categoryId,
+            restaurantId: session.restaurantId
+          },
+          data: {
+            displayOrder: index
+          }
+        })
+      )
+    );
 
     return NextResponse.json({ success: true });
 

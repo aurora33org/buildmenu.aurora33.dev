@@ -1,26 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 
 export async function GET(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || !session.restaurant_id) {
+    if (!session || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const db = getDatabase();
-
-    const restaurant = db.prepare(`
-      SELECT id, name, slug, description, is_active
-      FROM restaurants
-      WHERE id = ?
-    `).get(session.restaurant_id);
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: session.restaurantId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        isActive: true
+      }
+    });
 
     return NextResponse.json({ restaurant });
 

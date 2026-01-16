@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { verifyPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
-import type { User } from '@/lib/db/schema';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,14 +18,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getDatabase();
-
     // Find user by email
-    const user = db.prepare(`
-      SELECT * FROM users
-      WHERE email = ?
-        AND deleted_at IS NULL
-    `).get(email) as User | undefined;
+    const user = await prisma.user.findUnique({
+      where: {
+        email,
+        deletedAt: null,
+      },
+    });
 
     console.log('[LOGIN] User found:', user ? 'YES' : 'NO');
 
@@ -40,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     // Verify password
     console.log('[LOGIN] Verifying password...');
-    const isValidPassword = await verifyPassword(password, user.password_hash);
+    const isValidPassword = await verifyPassword(password, user.passwordHash);
     console.log('[LOGIN] Password valid:', isValidPassword);
 
     if (!isValidPassword) {
@@ -54,7 +52,7 @@ export async function POST(request: NextRequest) {
     console.log('[LOGIN] Login successful for:', email);
 
     // Create session
-    const { token } = createSession(user.id);
+    const { token } = await createSession(user.id);
 
     // Set cookie
     const response = NextResponse.json({
@@ -64,7 +62,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         name: user.name,
         role: user.role,
-        restaurant_id: user.restaurant_id,
+        restaurant_id: user.restaurantId,
       },
     });
 

@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { ClassicTemplate } from '@/components/public/templates/ClassicTemplate';
 import { ModernTemplate } from '@/components/public/templates/ModernTemplate';
 import { MinimalTemplate } from '@/components/public/templates/MinimalTemplate';
@@ -51,11 +51,10 @@ export const revalidate = 3600;
 
 // Generate static params for known slugs
 export async function generateStaticParams() {
-  const db = getDatabase();
-
-  const restaurants = db.prepare(`
-    SELECT slug FROM restaurants WHERE deleted_at IS NULL
-  `).all() as { slug: string }[];
+  const restaurants = await prisma.restaurant.findMany({
+    where: { deletedAt: null },
+    select: { slug: true },
+  });
 
   return restaurants.map((restaurant) => ({
     slug: restaurant.slug,
@@ -69,11 +68,17 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const db = getDatabase();
 
-  const restaurant = db.prepare(`
-    SELECT name, slug FROM restaurants WHERE slug = ? AND deleted_at IS NULL
-  `).get(slug) as { name: string; slug: string } | undefined;
+  const restaurant = await prisma.restaurant.findUnique({
+    where: {
+      slug,
+      deletedAt: null,
+    },
+    select: {
+      name: true,
+      slug: true,
+    },
+  });
 
   if (!restaurant) {
     return {
@@ -93,65 +98,125 @@ export async function generateMetadata({
 }
 
 async function getMenuData(slug: string) {
-  const db = getDatabase();
-
   // Get restaurant
-  const restaurant = db.prepare(`
-    SELECT id, name, slug
-    FROM restaurants
-    WHERE slug = ? AND deleted_at IS NULL
-  `).get(slug) as Restaurant | undefined;
+  const restaurant = await prisma.restaurant.findUnique({
+    where: {
+      slug,
+      deletedAt: null,
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+    },
+  });
 
   if (!restaurant) {
     return null;
   }
 
-  // Get restaurant settings
-  const settings = db.prepare(`
-    SELECT * FROM restaurant_settings
-    WHERE restaurant_id = ?
-  `).get(restaurant.id) as RestaurantSettings;
+  // Get restaurant settings, categories, and items in parallel
+  const [settings, categoriesData, items] = await Promise.all([
+    prisma.restaurantSettings.findUnique({
+      where: { restaurantId: restaurant.id },
+    }),
+    prisma.category.findMany({
+      where: {
+        restaurantId: restaurant.id,
+        deletedAt: null,
+      },
+      orderBy: [
+        { displayOrder: 'asc' },
+        { createdAt: 'asc' },
+      ],
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        displayOrder: true,
+        isVisible: true,
+      },
+    }),
+    prisma.menuItem.findMany({
+      where: {
+        restaurantId: restaurant.id,
+        deletedAt: null,
+      },
+      orderBy: [
+        { displayOrder: 'asc' },
+        { createdAt: 'asc' },
+      ],
+      select: {
+        id: true,
+        categoryId: true,
+        name: true,
+        description: true,
+        basePrice: true,
+        displayOrder: true,
+        isVisible: true,
+        isFeatured: true,
+      },
+    }),
+  ]);
 
-  // Get categories
-  const categories = db.prepare(`
-    SELECT id, name, description, display_order, is_visible
-    FROM categories
-    WHERE restaurant_id = ? AND deleted_at IS NULL
-    ORDER BY display_order ASC, created_at ASC
-  `).all(restaurant.id) as Category[];
+  // Convert to snake_case for template compatibility
+  const categories = categoriesData.map(cat => ({
+    id: cat.id,
+    name: cat.name,
+    description: cat.description,
+    display_order: cat.displayOrder,
+    is_visible: cat.isVisible,
+  }));
 
-  // Get all menu items
-  const items = db.prepare(`
-    SELECT
-      id,
-      category_id,
-      name,
-      description,
-      base_price,
-      display_order,
-      is_visible,
-      is_featured
-    FROM menu_items
-    WHERE restaurant_id = ? AND deleted_at IS NULL
-    ORDER BY display_order ASC, created_at ASC
-  `).all(restaurant.id) as MenuItem[];
+  const menuItems = items.map(item => ({
+    id: item.id,
+    category_id: item.categoryId,
+    name: item.name,
+    description: item.description,
+    base_price: item.basePrice,
+    display_order: item.displayOrder,
+    is_visible: item.isVisible,
+    is_featured: item.isFeatured,
+  }));
 
   // Organize items by category
   const categoriesWithItems: CategoryWithItems[] = categories.map(category => ({
     ...category,
-    items: items.filter(item => item.category_id === category.id)
+    items: menuItems.filter(item => item.category_id === category.id)
   }));
 
   // Track view
-  db.prepare(`
-    INSERT INTO menu_views (id, restaurant_id, viewed_at)
-    VALUES (?, ?, CURRENT_TIMESTAMP)
-  `).run(crypto.randomUUID(), restaurant.id);
+  await prisma.menuView.create({
+    data: {
+      restaurantId: restaurant.id,
+    },
+  });
+
+  // Convert settings to snake_case for template compatibility
+  const settingsFormatted = settings ? {
+    template_id: settings.templateId,
+    primary_color: settings.primaryColor,
+    secondary_color: settings.secondaryColor,
+    accent_color: settings.accentColor,
+    background_color: settings.backgroundColor,
+    text_color: settings.textColor,
+    font_heading: settings.fontHeading,
+    font_body: settings.fontBody,
+  } : {
+    template_id: 'classic',
+    primary_color: '#000000',
+    secondary_color: '#666666',
+    accent_color: '#ff6b6b',
+    background_color: '#ffffff',
+    text_color: '#000000',
+    font_heading: 'Inter',
+    font_body: 'Inter',
+  };
 
   // Calculate approximate page size for bandwidth tracking
   const pageData = {
     restaurant,
-    settings,
+    settings: settingsFormatted,
     categories: categoriesWithItems,
   };
 

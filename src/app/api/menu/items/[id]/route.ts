@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { updateMenuItemSchema } from '@/lib/validations/menu.schema';
 
@@ -9,9 +9,9 @@ export async function PATCH(
 ) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || session.role !== 'tenant_user' || !session.restaurant_id) {
+    if (!session || session.role !== 'tenant_user' || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -19,13 +19,15 @@ export async function PATCH(
     }
 
     const { id: itemId } = await params;
-    const db = getDatabase();
 
     // Verify item belongs to user's restaurant
-    const existingItem = db.prepare(`
-      SELECT id FROM menu_items
-      WHERE id = ? AND restaurant_id = ? AND deleted_at IS NULL
-    `).get(itemId, session.restaurant_id);
+    const existingItem = await prisma.menuItem.findFirst({
+      where: {
+        id: itemId,
+        restaurantId: session.restaurantId,
+        deletedAt: null
+      }
+    });
 
     if (!existingItem) {
       return NextResponse.json(
@@ -45,60 +47,40 @@ export async function PATCH(
     }
 
     const data = validation.data;
-    const updates: string[] = [];
-    const values: any[] = [];
+    const updateData: any = {};
 
-    if (data.name !== undefined) {
-      updates.push('name = ?');
-      values.push(data.name);
-    }
-    if (data.description !== undefined) {
-      updates.push('description = ?');
-      values.push(data.description || null);
-    }
-    if (data.basePrice !== undefined) {
-      updates.push('base_price = ?');
-      values.push(data.basePrice ?? null);
-    }
-    if (data.displayOrder !== undefined) {
-      updates.push('display_order = ?');
-      values.push(data.displayOrder);
-    }
-    if (data.isVisible !== undefined) {
-      updates.push('is_visible = ?');
-      values.push(data.isVisible ? 1 : 0);
-    }
-    if (data.isFeatured !== undefined) {
-      updates.push('is_featured = ?');
-      values.push(data.isFeatured ? 1 : 0);
-    }
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description || null;
+    if (data.basePrice !== undefined) updateData.basePrice = data.basePrice ?? null;
+    if (data.displayOrder !== undefined) updateData.displayOrder = data.displayOrder;
+    if (data.isVisible !== undefined) updateData.isVisible = data.isVisible;
+    if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured;
 
-    if (updates.length === 0) {
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { error: 'No fields to update' },
         { status: 400 }
       );
     }
 
-    updates.push('updated_at = CURRENT_TIMESTAMP');
-    values.push(itemId);
-
-    db.prepare(`
-      UPDATE menu_items
-      SET ${updates.join(', ')}
-      WHERE id = ?
-    `).run(...values);
-
-    const item = db.prepare(`
-      SELECT mi.*, c.name as category_name
-      FROM menu_items mi
-      INNER JOIN categories c ON c.id = mi.category_id
-      WHERE mi.id = ?
-    `).get(itemId);
+    const item = await prisma.menuItem.update({
+      where: { id: itemId },
+      data: updateData,
+      include: {
+        category: {
+          select: {
+            name: true
+          }
+        }
+      }
+    });
 
     return NextResponse.json({
       success: true,
-      item,
+      item: {
+        ...item,
+        category_name: item.category.name
+      },
     });
 
   } catch (error) {
@@ -116,9 +98,9 @@ export async function DELETE(
 ) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || session.role !== 'tenant_user' || !session.restaurant_id) {
+    if (!session || session.role !== 'tenant_user' || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -126,13 +108,15 @@ export async function DELETE(
     }
 
     const { id: itemId } = await params;
-    const db = getDatabase();
 
     // Verify item belongs to user's restaurant
-    const existingItem = db.prepare(`
-      SELECT id FROM menu_items
-      WHERE id = ? AND restaurant_id = ? AND deleted_at IS NULL
-    `).get(itemId, session.restaurant_id);
+    const existingItem = await prisma.menuItem.findFirst({
+      where: {
+        id: itemId,
+        restaurantId: session.restaurantId,
+        deletedAt: null
+      }
+    });
 
     if (!existingItem) {
       return NextResponse.json(
@@ -142,11 +126,10 @@ export async function DELETE(
     }
 
     // Soft delete
-    db.prepare(`
-      UPDATE menu_items
-      SET deleted_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(itemId);
+    await prisma.menuItem.update({
+      where: { id: itemId },
+      data: { deletedAt: new Date() }
+    });
 
     console.log('[ITEM DELETED]', { id: itemId });
 

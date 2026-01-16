@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { validateSlugFormat } from '@/lib/utils/slug';
 
 export async function GET(request: NextRequest) {
@@ -24,8 +24,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if slug exists in database
-    const db = getDatabase();
-    const existing = db.prepare('SELECT id FROM restaurants WHERE slug = ? AND deleted_at IS NULL').get(slug);
+    const existing = await prisma.restaurant.findFirst({
+      where: {
+        slug: slug,
+        deletedAt: null
+      },
+      select: { id: true }
+    });
 
     return NextResponse.json({
       available: !existing,

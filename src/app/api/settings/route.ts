@@ -1,24 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 
 export async function GET(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || !session.restaurant_id) {
+    if (!session || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const db = getDatabase();
-
-    const settings = db.prepare(`
-      SELECT * FROM restaurant_settings WHERE restaurant_id = ?
-    `).get(session.restaurant_id);
+    const settings = await prisma.restaurantSettings.findUnique({
+      where: { restaurantId: session.restaurantId }
+    });
 
     return NextResponse.json({ settings });
 
@@ -34,9 +32,9 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || !session.restaurant_id) {
+    if (!session || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -55,36 +53,21 @@ export async function PUT(request: NextRequest) {
       font_body,
     } = body;
 
-    const db = getDatabase();
+    const updateData: any = {};
 
-    db.prepare(`
-      UPDATE restaurant_settings
-      SET
-        template_id = COALESCE(?, template_id),
-        primary_color = ?,
-        secondary_color = ?,
-        accent_color = ?,
-        background_color = ?,
-        text_color = ?,
-        font_heading = ?,
-        font_body = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE restaurant_id = ?
-    `).run(
-      template_id,
-      primary_color,
-      secondary_color,
-      accent_color,
-      background_color,
-      text_color,
-      font_heading,
-      font_body,
-      session.restaurant_id
-    );
+    if (template_id !== undefined) updateData.templateId = template_id;
+    if (primary_color !== undefined) updateData.primaryColor = primary_color;
+    if (secondary_color !== undefined) updateData.secondaryColor = secondary_color;
+    if (accent_color !== undefined) updateData.accentColor = accent_color;
+    if (background_color !== undefined) updateData.backgroundColor = background_color;
+    if (text_color !== undefined) updateData.textColor = text_color;
+    if (font_heading !== undefined) updateData.fontHeading = font_heading;
+    if (font_body !== undefined) updateData.fontBody = font_body;
 
-    const settings = db.prepare(`
-      SELECT * FROM restaurant_settings WHERE restaurant_id = ?
-    `).get(session.restaurant_id);
+    const settings = await prisma.restaurantSettings.update({
+      where: { restaurantId: session.restaurantId },
+      data: updateData
+    });
 
     return NextResponse.json({
       success: true,
