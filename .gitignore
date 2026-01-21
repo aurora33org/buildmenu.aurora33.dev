@@ -41,6 +41,7 @@ next-env.d.ts
 *.db
 *.db-shm
 *.db-wal
+postgresql:/
 
 # IDE
 .vscode/
