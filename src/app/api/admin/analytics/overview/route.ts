@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
         activeTenants: activeTenants,
         pausedTenants: pausedTenants,
         pendingOnboarding: pendingOnboarding,
-        totalBandwidth30d: bandwidthStats._sum.bandwidthBytes ?? 0,
+        totalBandwidth30d: Number(bandwidthStats._sum.bandwidthBytes ?? 0),
         totalViews30d: bandwidthStats._sum.pageViews ?? 0,
         viewsToday: todayViewsAggregate._sum.pageViews ?? 0,
         viewsLast7Days: last7DaysViewsAggregate._sum.pageViews ?? 0,
