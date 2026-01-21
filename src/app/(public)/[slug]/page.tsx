@@ -4,6 +4,7 @@ import prisma from '@/lib/db/prisma';
 import { ClassicTemplate } from '@/components/public/templates/ClassicTemplate';
 import { ModernTemplate } from '@/components/public/templates/ModernTemplate';
 import { MinimalTemplate } from '@/components/public/templates/MinimalTemplate';
+import { ServiceUnavailable } from '@/components/public/ServiceUnavailable';
 import { trackBandwidth } from '@/lib/analytics/bandwidth';
 
 interface MenuItem {
@@ -108,11 +109,17 @@ async function getMenuData(slug: string) {
       id: true,
       name: true,
       slug: true,
+      pausedAt: true,
     },
   });
 
   if (!restaurant) {
     return null;
+  }
+
+  // Check if restaurant is paused
+  if (restaurant.pausedAt !== null) {
+    return { paused: true };
   }
 
   // Get restaurant settings, categories, and items in parallel
@@ -240,6 +247,11 @@ export default async function PublicMenuPage({
 
   if (!data) {
     notFound();
+  }
+
+  // Check if restaurant is paused
+  if ('paused' in data && data.paused) {
+    return <ServiceUnavailable />;
   }
 
   const { restaurant, settings, categories } = data;

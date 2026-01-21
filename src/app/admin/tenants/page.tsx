@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { TenantStatusBadge } from '@/components/admin/TenantStatusBadge';
 import { BandwidthBar } from '@/components/admin/BandwidthBar';
 import { RestaurantAvatar } from '@/components/shared/RestaurantAvatar';
+import { PauseDialog } from '@/components/admin/PauseDialog';
 
 interface Tenant {
   id: string;
@@ -33,6 +34,8 @@ export default function TenantsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [pauseDialogOpen, setPauseDialogOpen] = useState(false);
+  const [tenantToPause, setTenantToPause] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     fetchTenants();
@@ -55,17 +58,19 @@ export default function TenantsPage() {
     }
   };
 
-  const handlePause = async (tenantId: string) => {
-    if (!confirm('¿Estás seguro de pausar este tenant? El menú no será accesible.')) {
-      return;
-    }
+  const handlePause = (tenantId: string, tenantName: string) => {
+    setTenantToPause({ id: tenantId, name: tenantName });
+    setPauseDialogOpen(true);
+  };
 
+  const handlePauseConfirm = async (tenantId: string, reason: string) => {
+    setPauseDialogOpen(false);
     setActionLoading(tenantId);
     try {
       const response = await fetch(`/api/admin/tenants/${tenantId}/pause`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: 'Pausado manualmente por admin' }),
+        body: JSON.stringify({ reason }),
       });
 
       if (!response.ok) {
@@ -78,7 +83,13 @@ export default function TenantsPage() {
       alert(err instanceof Error ? err.message : 'Error al pausar tenant');
     } finally {
       setActionLoading(null);
+      setTenantToPause(null);
     }
+  };
+
+  const handlePauseCancel = () => {
+    setPauseDialogOpen(false);
+    setTenantToPause(null);
   };
 
   const handleUnpause = async (tenantId: string) => {
@@ -215,7 +226,7 @@ export default function TenantsPage() {
                             <Button
                               variant="destructive"
                               size="sm"
-                              onClick={() => handlePause(tenant.id)}
+                              onClick={() => handlePause(tenant.id, tenant.restaurant_name || tenant.name)}
                               disabled={actionLoading === tenant.id}
                             >
                               {actionLoading === tenant.id ? 'Procesando...' : 'Pausar'}
@@ -297,6 +308,16 @@ export default function TenantsPage() {
             );
           })}
         </div>
+      )}
+
+      {tenantToPause && (
+        <PauseDialog
+          tenantId={tenantToPause.id}
+          tenantName={tenantToPause.name}
+          onConfirm={handlePauseConfirm}
+          onCancel={handlePauseCancel}
+          isOpen={pauseDialogOpen}
+        />
       )}
     </div>
   );

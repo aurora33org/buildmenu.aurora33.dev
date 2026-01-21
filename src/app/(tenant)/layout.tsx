@@ -1,11 +1,39 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { Button } from '@/components/shared/ui/button';
+import { getSessionFromCookie } from '@/lib/auth/session';
+import prisma from '@/lib/db/prisma';
+import { PausedBanner } from '@/components/tenant/PausedBanner';
 
-export default function TenantLayout({
+export default async function TenantLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Get session and check pause status
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore.toString();
+  const session = await getSessionFromCookie(cookieHeader);
+
+  let pauseInfo = null;
+
+  if (session && session.restaurantId) {
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: session.restaurantId },
+      select: {
+        pausedAt: true,
+        pausedReason: true,
+      },
+    });
+
+    if (restaurant && restaurant.pausedAt !== null) {
+      pauseInfo = {
+        pausedAt: restaurant.pausedAt,
+        pausedReason: restaurant.pausedReason || 'No se especificó motivo',
+      };
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b bg-white">
@@ -35,6 +63,7 @@ export default function TenantLayout({
           </div>
         </div>
       </header>
+      {pauseInfo && <PausedBanner reason={pauseInfo.pausedReason} />}
       <main className="container mx-auto p-6">
         {children}
       </main>
