@@ -3,9 +3,9 @@ import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { updateMenuItemSchema } from '@/lib/validations/menu.schema';
 
-export async function PATCH(
+export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const cookieHeader = request.headers.get('cookie');
@@ -18,21 +18,56 @@ export async function PATCH(
       );
     }
 
-    const { id: itemId } = await params;
-
-    // Verify item belongs to user's restaurant
-    const existingItem = await prisma.menuItem.findFirst({
+    const item = await prisma.menuItem.findFirst({
       where: {
-        id: itemId,
+        id: params.id,
         restaurantId: session.restaurantId,
         deletedAt: null
+      },
+      include: {
+        category: {
+          select: {
+            name: true
+          }
+        }
       }
     });
 
-    if (!existingItem) {
+    if (!item) {
       return NextResponse.json(
         { error: 'Item not found' },
         { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      item: {
+        ...item,
+        category_name: item.category.name
+      }
+    });
+
+  } catch (error) {
+    console.error('Get item error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const cookieHeader = request.headers.get('cookie');
+    const session = await getSessionFromCookie(cookieHeader);
+
+    if (!session || session.role !== 'tenant_user' || !session.restaurantId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 
@@ -47,25 +82,33 @@ export async function PATCH(
     }
 
     const data = validation.data;
-    const updateData: any = {};
 
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.description !== undefined) updateData.description = data.description || null;
-    if (data.basePrice !== undefined) updateData.basePrice = data.basePrice ?? null;
-    if (data.displayOrder !== undefined) updateData.displayOrder = data.displayOrder;
-    if (data.isVisible !== undefined) updateData.isVisible = data.isVisible;
-    if (data.isFeatured !== undefined) updateData.isFeatured = data.isFeatured;
+    // Verify item belongs to user's restaurant
+    const existingItem = await prisma.menuItem.findFirst({
+      where: {
+        id: params.id,
+        restaurantId: session.restaurantId,
+        deletedAt: null
+      }
+    });
 
-    if (Object.keys(updateData).length === 0) {
+    if (!existingItem) {
       return NextResponse.json(
-        { error: 'No fields to update' },
-        { status: 400 }
+        { error: 'Item not found or does not belong to your restaurant' },
+        { status: 404 }
       );
     }
 
     const item = await prisma.menuItem.update({
-      where: { id: itemId },
-      data: updateData,
+      where: { id: params.id },
+      data: {
+        name: data.name,
+        description: data.description,
+        basePrice: data.basePrice,
+        displayOrder: data.displayOrder,
+        isVisible: data.isVisible,
+        isFeatured: data.isFeatured,
+      },
       include: {
         category: {
           select: {
@@ -74,6 +117,8 @@ export async function PATCH(
         }
       }
     });
+
+    console.log('[ITEM UPDATED]', { id: params.id, name: data.name });
 
     return NextResponse.json({
       success: true,
@@ -94,7 +139,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const cookieHeader = request.headers.get('cookie');
@@ -107,12 +152,10 @@ export async function DELETE(
       );
     }
 
-    const { id: itemId } = await params;
-
     // Verify item belongs to user's restaurant
     const existingItem = await prisma.menuItem.findFirst({
       where: {
-        id: itemId,
+        id: params.id,
         restaurantId: session.restaurantId,
         deletedAt: null
       }
@@ -120,23 +163,20 @@ export async function DELETE(
 
     if (!existingItem) {
       return NextResponse.json(
-        { error: 'Item not found' },
+        { error: 'Item not found or does not belong to your restaurant' },
         { status: 404 }
       );
     }
 
     // Soft delete
     await prisma.menuItem.update({
-      where: { id: itemId },
+      where: { id: params.id },
       data: { deletedAt: new Date() }
     });
 
-    console.log('[ITEM DELETED]', { id: itemId });
+    console.log('[ITEM DELETED]', { id: params.id });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Item deleted successfully',
-    });
+    return NextResponse.json({ success: true });
 
   } catch (error) {
     console.error('Delete item error:', error);

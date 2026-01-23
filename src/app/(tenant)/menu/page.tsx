@@ -49,11 +49,13 @@ interface MenuItem {
 function SortableCategory({
   category,
   onAddItem,
+  onEditCategory,
   onDeleteCategory,
   children,
 }: {
   category: Category;
   onAddItem: () => void;
+  onEditCategory: () => void;
   onDeleteCategory: () => void;
   children: React.ReactNode;
 }) {
@@ -99,6 +101,9 @@ function SortableCategory({
               <Button size="sm" onClick={onAddItem}>
                 Agregar Item
               </Button>
+              <Button size="sm" variant="outline" onClick={onEditCategory}>
+                Editar
+              </Button>
               <Button
                 size="sm"
                 variant="destructive"
@@ -119,9 +124,11 @@ function SortableCategory({
 
 function SortableItem({
   item,
+  onEdit,
   onDelete,
 }: {
   item: MenuItem;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const {
@@ -165,13 +172,18 @@ function SortableItem({
           )}
         </div>
       </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={onDelete}
-      >
-        Eliminar
-      </Button>
+      <div className="flex gap-2">
+        <Button size="sm" variant="ghost" onClick={onEdit}>
+          Editar
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDelete}
+        >
+          Eliminar
+        </Button>
+      </div>
     </div>
   );
 }
@@ -182,6 +194,8 @@ export default function MenuEditorPage() {
   const [loading, setLoading] = useState(true);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showItemForm, setShowItemForm] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
 
   const [categoryForm, setCategoryForm] = useState({
     name: '',
@@ -292,6 +306,73 @@ export default function MenuEditorPage() {
       fetchData();
     } catch (error) {
       console.error('Error deleting item:', error);
+    }
+  };
+
+  const handleEditCategory = (category: Category) => {
+    setEditingCategory(category);
+    setCategoryForm({
+      name: category.name,
+      description: category.description || '',
+    });
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+
+    try {
+      const response = await fetch(`/api/menu/categories/${editingCategory.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: categoryForm.name,
+          description: categoryForm.description || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        setCategoryForm({ name: '', description: '' });
+        setEditingCategory(null);
+        fetchData();
+      }
+    } catch (error) {
+      console.error('Error updating category:', error);
+    }
+  };
+
+  const handleEditItem = (item: MenuItem) => {
+    setEditingItem(item);
+    setItemForm({
+      categoryId: item.category_id,
+      name: item.name,
+      description: item.description || '',
+      basePrice: item.base_price !== null ? item.base_price.toString() : '',
+    });
+  };
+
+  const handleUpdateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+
+    try {
+      const response = await fetch(`/api/menu/items/${editingItem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: itemForm.name,
+          description: itemForm.description || undefined,
+          basePrice: itemForm.basePrice ? parseFloat(itemForm.basePrice) : null,
+        }),
+      });
+
+      if (response.ok) {
+        setItemForm({ categoryId: '', name: '', description: '', basePrice: '' });
+        setEditingItem(null);
+        fetchData();
+      }
+    } catch (error) {
+      console.error('Error updating item:', error);
     }
   };
 
@@ -422,6 +503,48 @@ export default function MenuEditorPage() {
         </Card>
       )}
 
+      {/* Edit Category Form */}
+      {editingCategory && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Editar Categoría</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdateCategory} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="editCategoryName">Nombre *</Label>
+                <Input
+                  id="editCategoryName"
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                  placeholder="Ej: Platillos Principales"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editCategoryDesc">Descripción</Label>
+                <Textarea
+                  id="editCategoryDesc"
+                  value={categoryForm.description}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descripción opcional..."
+                  rows={2}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit">Guardar Cambios</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setEditingCategory(null);
+                  setCategoryForm({ name: '', description: '' });
+                }}>
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Categories & Items */}
       {categories.length === 0 ? (
         <Card>
@@ -453,6 +576,7 @@ export default function MenuEditorPage() {
                     setItemForm(prev => ({ ...prev, categoryId: category.id }));
                     setShowItemForm(true);
                   }}
+                  onEditCategory={() => handleEditCategory(category)}
                   onDeleteCategory={() => handleDeleteCategory(category.id)}
                 >
                   {getItemsByCategory(category.id).length === 0 ? (
@@ -474,6 +598,7 @@ export default function MenuEditorPage() {
                             <SortableItem
                               key={item.id}
                               item={item}
+                              onEdit={() => handleEditItem(item)}
                               onDelete={() => handleDeleteItem(item.id)}
                             />
                           ))}
@@ -539,11 +664,68 @@ export default function MenuEditorPage() {
         </Card>
       )}
 
+      {/* Edit Item Form Modal */}
+      {editingItem && (
+        <Card className="fixed inset-x-4 top-20 max-w-2xl mx-auto z-50 shadow-lg">
+          <CardHeader>
+            <CardTitle>Editar Item</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdateItem} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="editItemName">Nombre *</Label>
+                <Input
+                  id="editItemName"
+                  value={itemForm.name}
+                  onChange={(e) => setItemForm(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                  placeholder="Ej: Tacos al Pastor"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editItemDesc">Descripción</Label>
+                <Textarea
+                  id="editItemDesc"
+                  value={itemForm.description}
+                  onChange={(e) => setItemForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descripción del platillo..."
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editItemPrice">Precio</Label>
+                <Input
+                  id="editItemPrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={itemForm.basePrice}
+                  onChange={(e) => setItemForm(prev => ({ ...prev, basePrice: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit">Guardar Cambios</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setEditingItem(null);
+                  setItemForm({ categoryId: '', name: '', description: '', basePrice: '' });
+                }}>
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Overlay for modal */}
-      {showItemForm && (
+      {(showItemForm || editingItem) && (
         <div
           className="fixed inset-0 bg-black/50 z-40"
-          onClick={() => setShowItemForm(false)}
+          onClick={() => {
+            setShowItemForm(false);
+            setEditingItem(null);
+          }}
         />
       )}
     </div>
