@@ -24,6 +24,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage, handleApiError } from '@/lib/utils/error-handler';
 
 interface Category {
   id: string;
@@ -189,6 +191,7 @@ function SortableItem({
 }
 
 export default function MenuEditorPage() {
+  const { toast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -227,13 +230,21 @@ export default function MenuEditorPage() {
         fetch('/api/menu/items'),
       ]);
 
+      if (!categoriesRes.ok || !itemsRes.ok) {
+        throw new Error('Failed to fetch menu data');
+      }
+
       const categoriesData = await categoriesRes.json();
       const itemsData = await itemsRes.json();
 
       setCategories(categoriesData.categories || []);
       setItems(itemsData.items || []);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -256,9 +267,24 @@ export default function MenuEditorPage() {
         setCategoryForm({ name: '', description: '' });
         setShowCategoryForm(false);
         fetchData();
+        toast({
+          title: "Éxito",
+          description: "Categoría creada correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error creating category:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -281,9 +307,24 @@ export default function MenuEditorPage() {
         setItemForm({ categoryId: '', name: '', description: '', basePrice: '' });
         setShowItemForm(false);
         fetchData();
+        toast({
+          title: "Éxito",
+          description: "Item creado correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error creating item:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -291,10 +332,28 @@ export default function MenuEditorPage() {
     if (!confirm('¿Eliminar esta categoría y todos sus items?')) return;
 
     try {
-      await fetch(`/api/menu/categories/${id}`, { method: 'DELETE' });
-      fetchData();
+      const response = await fetch(`/api/menu/categories/${id}`, { method: 'DELETE' });
+
+      if (response.ok) {
+        fetchData();
+        toast({
+          title: "Éxito",
+          description: "Categoría eliminada correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      console.error('Error deleting category:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -302,10 +361,28 @@ export default function MenuEditorPage() {
     if (!confirm('¿Eliminar este item?')) return;
 
     try {
-      await fetch(`/api/menu/items/${id}`, { method: 'DELETE' });
-      fetchData();
+      const response = await fetch(`/api/menu/items/${id}`, { method: 'DELETE' });
+
+      if (response.ok) {
+        fetchData();
+        toast({
+          title: "Éxito",
+          description: "Item eliminado correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      console.error('Error deleting item:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -335,9 +412,24 @@ export default function MenuEditorPage() {
         setCategoryForm({ name: '', description: '' });
         setEditingCategory(null);
         fetchData();
+        toast({
+          title: "Éxito",
+          description: "Categoría actualizada correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error updating category:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -370,9 +462,24 @@ export default function MenuEditorPage() {
         setItemForm({ categoryId: '', name: '', description: '', basePrice: '' });
         setEditingItem(null);
         fetchData();
+        toast({
+          title: "Éxito",
+          description: "Item actualizado correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error updating item:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
