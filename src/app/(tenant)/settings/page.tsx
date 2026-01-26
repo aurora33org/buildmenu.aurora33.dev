@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/shared/ui/button';
 import { Label } from '@/components/shared/ui/label';
+import { Input } from '@/components/shared/ui/input';
+import { Textarea } from '@/components/shared/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/shared/ui/card';
 
 interface Settings {
@@ -14,6 +16,19 @@ interface Settings {
   text_color: string | null;
   font_heading: string | null;
   font_body: string | null;
+}
+
+interface RestaurantInfo {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  address: string | null;
+  facebookUrl: string | null;
+  instagramHandle: string | null;
+  tiktokHandle: string | null;
 }
 
 const GOOGLE_FONTS = [
@@ -49,12 +64,27 @@ export default function SettingsPage() {
     font_heading: 'Inter',
     font_body: 'Inter',
   });
+  const [restaurantInfo, setRestaurantInfo] = useState<RestaurantInfo>({
+    id: '',
+    name: '',
+    slug: '',
+    description: null,
+    contactEmail: null,
+    contactPhone: null,
+    address: null,
+    facebookUrl: null,
+    instagramHandle: null,
+    tiktokHandle: null,
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingInfo, setSavingInfo] = useState(false);
   const [message, setMessage] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
 
   useEffect(() => {
     fetchSettings();
+    fetchRestaurantInfo();
     loadGoogleFonts();
   }, []);
 
@@ -82,11 +112,59 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchRestaurantInfo = async () => {
+    try {
+      const response = await fetch('/api/restaurant/info');
+      const data = await response.json();
+
+      if (data.restaurant) {
+        setRestaurantInfo(data.restaurant);
+      }
+    } catch (error) {
+      console.error('Error fetching restaurant info:', error);
+    }
+  };
+
   const loadGoogleFonts = () => {
     const link = document.createElement('link');
     link.href = `https://fonts.googleapis.com/css2?${GOOGLE_FONTS.map(font => `family=${font.replace(' ', '+')}`).join('&')}&display=swap`;
     link.rel = 'stylesheet';
     document.head.appendChild(link);
+  };
+
+  const handleSaveInfo = async () => {
+    setSavingInfo(true);
+    setInfoMessage('');
+
+    try {
+      const response = await fetch('/api/restaurant/info', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: restaurantInfo.name,
+          description: restaurantInfo.description,
+          contactEmail: restaurantInfo.contactEmail,
+          contactPhone: restaurantInfo.contactPhone,
+          address: restaurantInfo.address,
+          facebookUrl: restaurantInfo.facebookUrl,
+          instagramHandle: restaurantInfo.instagramHandle,
+          tiktokHandle: restaurantInfo.tiktokHandle,
+        }),
+      });
+
+      if (response.ok) {
+        setInfoMessage('Información guardada exitosamente');
+        setTimeout(() => setInfoMessage(''), 3000);
+      } else {
+        const data = await response.json();
+        setInfoMessage(data.error || 'Error al guardar información');
+      }
+    } catch (error) {
+      console.error('Error saving restaurant info:', error);
+      setInfoMessage('Error al guardar información');
+    } finally {
+      setSavingInfo(false);
+    }
   };
 
   const handleSave = async () => {
@@ -130,6 +208,135 @@ export default function SettingsPage() {
           Personaliza la apariencia de tu menú público
         </p>
       </div>
+
+      {/* Restaurant Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Información del Restaurante</CardTitle>
+          <CardDescription>
+            Actualiza los detalles básicos de tu restaurante
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nombre del Restaurante *</Label>
+              <Input
+                id="name"
+                value={restaurantInfo.name}
+                onChange={(e) => setRestaurantInfo({ ...restaurantInfo, name: e.target.value })}
+                placeholder="Mi Restaurante"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="slug">URL del Menú (no editable)</Label>
+              <Input
+                id="slug"
+                value={restaurantInfo.slug}
+                disabled
+                className="bg-muted cursor-not-allowed"
+              />
+              <p className="text-xs text-muted-foreground">
+                Tu menú está en: /{restaurantInfo.slug}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Descripción</Label>
+            <Textarea
+              id="description"
+              value={restaurantInfo.description || ''}
+              onChange={(e) => setRestaurantInfo({ ...restaurantInfo, description: e.target.value })}
+              placeholder="Breve descripción de tu restaurante..."
+              rows={3}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="contactEmail">Email de Contacto</Label>
+              <Input
+                id="contactEmail"
+                type="email"
+                value={restaurantInfo.contactEmail || ''}
+                onChange={(e) => setRestaurantInfo({ ...restaurantInfo, contactEmail: e.target.value })}
+                placeholder="contacto@restaurante.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="contactPhone">Teléfono</Label>
+              <Input
+                id="contactPhone"
+                value={restaurantInfo.contactPhone || ''}
+                onChange={(e) => setRestaurantInfo({ ...restaurantInfo, contactPhone: e.target.value })}
+                placeholder="+52 123 456 7890"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="address">Dirección</Label>
+            <Input
+              id="address"
+              value={restaurantInfo.address || ''}
+              onChange={(e) => setRestaurantInfo({ ...restaurantInfo, address: e.target.value })}
+              placeholder="Calle Principal #123, Ciudad"
+            />
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-semibold mb-3">Redes Sociales</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="facebookUrl">Facebook URL</Label>
+                <Input
+                  id="facebookUrl"
+                  type="url"
+                  value={restaurantInfo.facebookUrl || ''}
+                  onChange={(e) => setRestaurantInfo({ ...restaurantInfo, facebookUrl: e.target.value })}
+                  placeholder="https://facebook.com/..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="instagramHandle">Instagram (@usuario)</Label>
+                <Input
+                  id="instagramHandle"
+                  value={restaurantInfo.instagramHandle || ''}
+                  onChange={(e) => setRestaurantInfo({ ...restaurantInfo, instagramHandle: e.target.value })}
+                  placeholder="restaurante"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="tiktokHandle">TikTok (@usuario)</Label>
+                <Input
+                  id="tiktokHandle"
+                  value={restaurantInfo.tiktokHandle || ''}
+                  onChange={(e) => setRestaurantInfo({ ...restaurantInfo, tiktokHandle: e.target.value })}
+                  placeholder="restaurante"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 pt-4">
+            <Button onClick={handleSaveInfo} disabled={savingInfo}>
+              {savingInfo ? 'Guardando...' : 'Guardar Información'}
+            </Button>
+
+            {infoMessage && (
+              <p className={`text-sm ${infoMessage.includes('Error') ? 'text-destructive' : 'text-green-600'}`}>
+                {infoMessage}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Template Selection */}
       <Card>
