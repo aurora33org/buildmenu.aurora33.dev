@@ -19,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shared/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage, handleApiError } from '@/lib/utils/error-handler';
 
 interface User {
   id: string;
@@ -30,6 +32,7 @@ interface User {
 }
 
 export default function UsersPage() {
+  const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,10 +50,19 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     try {
       const response = await fetch('/api/admin/users');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
       const data = await response.json();
       setUsers(data.users || []);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -82,13 +94,24 @@ export default function UsersPage() {
 
       if (response.ok) {
         fetchUsers();
+        toast({
+          title: "Éxito",
+          description: `Usuario ${email} eliminado correctamente`,
+        });
       } else {
-        const data = await response.json();
-        alert(data.error || 'Error al eliminar usuario');
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error deleting user:', error);
-      alert('Error al eliminar usuario');
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 

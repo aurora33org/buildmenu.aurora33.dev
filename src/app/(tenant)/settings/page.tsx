@@ -6,6 +6,8 @@ import { Label } from '@/components/shared/ui/label';
 import { Input } from '@/components/shared/ui/input';
 import { Textarea } from '@/components/shared/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/shared/ui/card';
+import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage, handleApiError } from '@/lib/utils/error-handler';
 
 interface Settings {
   template_id: string;
@@ -54,6 +56,7 @@ const TEMPLATES = [
 ];
 
 export default function SettingsPage() {
+  const { toast } = useToast();
   const [settings, setSettings] = useState<Settings>({
     template_id: 'classic',
     primary_color: '#2563eb',
@@ -79,8 +82,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
-  const [message, setMessage] = useState('');
-  const [infoMessage, setInfoMessage] = useState('');
 
   useEffect(() => {
     fetchSettings();
@@ -134,7 +135,6 @@ export default function SettingsPage() {
 
   const handleSaveInfo = async () => {
     setSavingInfo(true);
-    setInfoMessage('');
 
     try {
       const response = await fetch('/api/restaurant/info', {
@@ -153,15 +153,24 @@ export default function SettingsPage() {
       });
 
       if (response.ok) {
-        setInfoMessage('Información guardada exitosamente');
-        setTimeout(() => setInfoMessage(''), 3000);
+        toast({
+          title: "Éxito",
+          description: "Información guardada correctamente",
+        });
       } else {
-        const data = await response.json();
-        setInfoMessage(data.error || 'Error al guardar información');
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error saving restaurant info:', error);
-      setInfoMessage('Error al guardar información');
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     } finally {
       setSavingInfo(false);
     }
@@ -169,7 +178,6 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    setMessage('');
 
     try {
       const response = await fetch('/api/settings', {
@@ -179,14 +187,24 @@ export default function SettingsPage() {
       });
 
       if (response.ok) {
-        setMessage('Configuración guardada exitosamente');
-        setTimeout(() => setMessage(''), 3000);
+        toast({
+          title: "Éxito",
+          description: "Configuración guardada correctamente",
+        });
       } else {
-        setMessage('Error al guardar configuración');
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error saving settings:', error);
-      setMessage('Error al guardar configuración');
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
@@ -328,12 +346,6 @@ export default function SettingsPage() {
             <Button onClick={handleSaveInfo} disabled={savingInfo}>
               {savingInfo ? 'Guardando...' : 'Guardar Información'}
             </Button>
-
-            {infoMessage && (
-              <p className={`text-sm ${infoMessage.includes('Error') ? 'text-destructive' : 'text-green-600'}`}>
-                {infoMessage}
-              </p>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -557,12 +569,6 @@ export default function SettingsPage() {
         <Button onClick={handleSave} disabled={saving}>
           {saving ? 'Guardando...' : 'Guardar Cambios'}
         </Button>
-
-        {message && (
-          <p className={`text-sm ${message.includes('Error') ? 'text-destructive' : 'text-green-600'}`}>
-            {message}
-          </p>
-        )}
       </div>
     </div>
   );
