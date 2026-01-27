@@ -19,6 +19,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shared/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage, handleApiError } from '@/lib/utils/error-handler';
 
@@ -36,6 +47,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
@@ -85,7 +97,7 @@ export default function UsersPage() {
   };
 
   const handleDeleteUser = async (id: string, email: string) => {
-    if (!confirm(`¿Eliminar al usuario ${email}?`)) return;
+    setDeletingUserId(id);
 
     try {
       const response = await fetch(`/api/admin/users/${id}`, {
@@ -112,6 +124,8 @@ export default function UsersPage() {
         description: getErrorMessage(error),
         variant: "destructive",
       });
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -197,13 +211,35 @@ export default function UsersPage() {
                   </TableCell>
                   <TableCell>{formatDate(user.createdAt)}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDeleteUser(user.id, user.email)}
-                    >
-                      Delete
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={deletingUserId === user.id}
+                        >
+                          {deletingUserId === user.id ? 'Deleting...' : 'Delete'}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Está a punto de eliminar al usuario <strong>{user.email}</strong>.
+                            Esta acción no se puede deshacer.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteUser(user.id, user.email)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))

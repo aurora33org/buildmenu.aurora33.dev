@@ -7,6 +7,17 @@ import { Label } from '@/components/shared/ui/label';
 import { Textarea } from '@/components/shared/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/shared/ui/card';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -53,12 +64,14 @@ function SortableCategory({
   onAddItem,
   onEditCategory,
   onDeleteCategory,
+  isDeleting,
   children,
 }: {
   category: Category;
   onAddItem: () => void;
   onEditCategory: () => void;
   onDeleteCategory: () => void;
+  isDeleting: boolean;
   children: React.ReactNode;
 }) {
   const {
@@ -106,13 +119,35 @@ function SortableCategory({
               <Button size="sm" variant="outline" onClick={onEditCategory}>
                 Editar
               </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={onDeleteCategory}
-              >
-                Eliminar
-              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? 'Eliminando...' : 'Eliminar'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Eliminar categoría?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Está a punto de eliminar la categoría <strong>{category.name}</strong> y todos sus items ({category.items_count}).
+                      Esta acción no se puede deshacer.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={onDeleteCategory}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Eliminar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </CardHeader>
@@ -128,10 +163,12 @@ function SortableItem({
   item,
   onEdit,
   onDelete,
+  isDeleting,
 }: {
   item: MenuItem;
   onEdit: () => void;
   onDelete: () => void;
+  isDeleting: boolean;
 }) {
   const {
     attributes,
@@ -178,13 +215,35 @@ function SortableItem({
         <Button size="sm" variant="ghost" onClick={onEdit}>
           Editar
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDelete}
-        >
-          Eliminar
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Eliminando...' : 'Eliminar'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar item?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Está a punto de eliminar el item <strong>{item.name}</strong>.
+                Esta acción no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={onDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
@@ -199,6 +258,8 @@ export default function MenuEditorPage() {
   const [showItemForm, setShowItemForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const [categoryForm, setCategoryForm] = useState({
     name: '',
@@ -329,7 +390,7 @@ export default function MenuEditorPage() {
   };
 
   const handleDeleteCategory = async (id: string) => {
-    if (!confirm('¿Eliminar esta categoría y todos sus items?')) return;
+    setDeletingCategoryId(id);
 
     try {
       const response = await fetch(`/api/menu/categories/${id}`, { method: 'DELETE' });
@@ -354,11 +415,13 @@ export default function MenuEditorPage() {
         description: getErrorMessage(error),
         variant: "destructive",
       });
+    } finally {
+      setDeletingCategoryId(null);
     }
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (!confirm('¿Eliminar este item?')) return;
+    setDeletingItemId(id);
 
     try {
       const response = await fetch(`/api/menu/items/${id}`, { method: 'DELETE' });
@@ -383,6 +446,8 @@ export default function MenuEditorPage() {
         description: getErrorMessage(error),
         variant: "destructive",
       });
+    } finally {
+      setDeletingItemId(null);
     }
   };
 
@@ -685,6 +750,7 @@ export default function MenuEditorPage() {
                   }}
                   onEditCategory={() => handleEditCategory(category)}
                   onDeleteCategory={() => handleDeleteCategory(category.id)}
+                  isDeleting={deletingCategoryId === category.id}
                 >
                   {getItemsByCategory(category.id).length === 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -707,6 +773,7 @@ export default function MenuEditorPage() {
                               item={item}
                               onEdit={() => handleEditItem(item)}
                               onDelete={() => handleDeleteItem(item.id)}
+                              isDeleting={deletingItemId === item.id}
                             />
                           ))}
                         </div>
