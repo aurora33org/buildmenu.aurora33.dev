@@ -45,6 +45,7 @@ const GOOGLE_FONTS = [
   'Playfair Display',
   'Merriweather',
   'Cormorant',
+  'Lora',
   'Crimson Text',
 ];
 

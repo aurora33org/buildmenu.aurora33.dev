@@ -4,6 +4,7 @@ import prisma from '@/lib/db/prisma';
 import { ClassicTemplate } from '@/components/public/templates/ClassicTemplate';
 import { ModernTemplate } from '@/components/public/templates/ModernTemplate';
 import { MinimalTemplate } from '@/components/public/templates/MinimalTemplate';
+import { ElegantTemplate } from '@/components/public/templates/ElegantTemplate';
 import { ServiceUnavailable } from '@/components/public/ServiceUnavailable';
 import { trackBandwidth } from '@/lib/analytics/bandwidth';
 
@@ -271,8 +272,7 @@ export default async function PublicMenuPage({
     case 'minimal':
       return <MinimalTemplate {...templateProps} />;
     case 'elegant':
-      // Elegant template to be implemented in Phase 4
-      return <ClassicTemplate {...templateProps} />;
+      return <ElegantTemplate {...templateProps} />;
     case 'classic':
     default:
       return <ClassicTemplate {...templateProps} />;
