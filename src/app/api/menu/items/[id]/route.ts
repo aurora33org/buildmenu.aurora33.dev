@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { updateMenuItemSchema } from '@/lib/validations/menu.schema';
+import { sanitizeInput } from '@/lib/utils/sanitize';
 
 export async function GET(
   request: NextRequest,
@@ -99,16 +100,20 @@ export async function PATCH(
       );
     }
 
+    // Sanitize text inputs
+    const sanitizedData: any = {};
+    if (data.name !== undefined) sanitizedData.name = sanitizeInput(data.name);
+    if (data.description !== undefined) {
+      sanitizedData.description = data.description ? sanitizeInput(data.description) : null;
+    }
+    if (data.basePrice !== undefined) sanitizedData.basePrice = data.basePrice;
+    if (data.displayOrder !== undefined) sanitizedData.displayOrder = data.displayOrder;
+    if (data.isVisible !== undefined) sanitizedData.isVisible = data.isVisible;
+    if (data.isFeatured !== undefined) sanitizedData.isFeatured = data.isFeatured;
+
     const item = await prisma.menuItem.update({
       where: { id: params.id },
-      data: {
-        name: data.name,
-        description: data.description,
-        basePrice: data.basePrice,
-        displayOrder: data.displayOrder,
-        isVisible: data.isVisible,
-        isFeatured: data.isFeatured,
-      },
+      data: sanitizedData,
       include: {
         category: {
           select: {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { createMenuItemSchema } from '@/lib/validations/menu.schema';
+import { sanitizeInput } from '@/lib/utils/sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -98,12 +99,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Sanitize text inputs
+    const sanitizedName = sanitizeInput(data.name);
+    const sanitizedDescription = data.description ? sanitizeInput(data.description) : null;
+
     const item = await prisma.menuItem.create({
       data: {
         categoryId: data.categoryId,
         restaurantId: session.restaurantId,
-        name: data.name,
-        description: data.description || null,
+        name: sanitizedName,
+        description: sanitizedDescription,
         basePrice: data.basePrice ?? null,
         displayOrder: data.displayOrder,
         isVisible: data.isVisible,

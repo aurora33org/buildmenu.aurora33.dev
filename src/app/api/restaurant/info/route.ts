@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { updateRestaurantInfoSchema } from '@/lib/validations/restaurant.schema';
+import { sanitizeInput } from '@/lib/utils/sanitize';
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,16 +68,28 @@ export async function PATCH(request: NextRequest) {
 
     const data = validation.data;
 
-    // Build update object with only provided fields
+    // Build update object with only provided fields, sanitize text inputs
     const updateData: any = {};
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.contactEmail !== undefined) updateData.contactEmail = data.contactEmail;
-    if (data.contactPhone !== undefined) updateData.contactPhone = data.contactPhone;
-    if (data.address !== undefined) updateData.address = data.address;
-    if (data.facebookUrl !== undefined) updateData.facebookUrl = data.facebookUrl;
-    if (data.instagramHandle !== undefined) updateData.instagramHandle = data.instagramHandle;
-    if (data.tiktokHandle !== undefined) updateData.tiktokHandle = data.tiktokHandle;
+    if (data.name !== undefined) updateData.name = sanitizeInput(data.name);
+    if (data.description !== undefined) {
+      updateData.description = data.description ? sanitizeInput(data.description) : null;
+    }
+    if (data.contactEmail !== undefined) updateData.contactEmail = data.contactEmail; // Don't sanitize email (already validated)
+    if (data.contactPhone !== undefined) {
+      updateData.contactPhone = data.contactPhone ? sanitizeInput(data.contactPhone) : null;
+    }
+    if (data.address !== undefined) {
+      updateData.address = data.address ? sanitizeInput(data.address) : null;
+    }
+    if (data.facebookUrl !== undefined) {
+      updateData.facebookUrl = data.facebookUrl ? sanitizeInput(data.facebookUrl) : null;
+    }
+    if (data.instagramHandle !== undefined) {
+      updateData.instagramHandle = data.instagramHandle ? sanitizeInput(data.instagramHandle) : null;
+    }
+    if (data.tiktokHandle !== undefined) {
+      updateData.tiktokHandle = data.tiktokHandle ? sanitizeInput(data.tiktokHandle) : null;
+    }
 
     const restaurant = await prisma.restaurant.update({
       where: { id: session.restaurantId },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { updateCategorySchema } from '@/lib/validations/menu.schema';
+import { sanitizeInput } from '@/lib/utils/sanitize';
 
 export async function GET(
   request: NextRequest,
@@ -98,15 +99,19 @@ export async function PATCH(
       );
     }
 
+    // Sanitize text inputs
+    const sanitizedData: any = {};
+    if (data.name !== undefined) sanitizedData.name = sanitizeInput(data.name);
+    if (data.description !== undefined) {
+      sanitizedData.description = data.description ? sanitizeInput(data.description) : null;
+    }
+    if (data.icon !== undefined) sanitizedData.icon = data.icon;
+    if (data.displayOrder !== undefined) sanitizedData.displayOrder = data.displayOrder;
+    if (data.isVisible !== undefined) sanitizedData.isVisible = data.isVisible;
+
     const category = await prisma.category.update({
       where: { id: params.id },
-      data: {
-        name: data.name,
-        description: data.description,
-        icon: data.icon,
-        displayOrder: data.displayOrder,
-        isVisible: data.isVisible,
-      }
+      data: sanitizedData
     });
 
     console.log('[CATEGORY UPDATED]', { id: params.id, name: data.name });
