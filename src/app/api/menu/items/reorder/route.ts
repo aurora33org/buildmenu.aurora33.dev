@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
+import { reorderItemsSchema } from '@/lib/validations/menu.schema';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,14 +16,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { itemIds, categoryId } = body as { itemIds: string[]; categoryId: string };
+    const validation = reorderItemsSchema.safeParse(body);
 
-    if (!Array.isArray(itemIds)) {
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'itemIds must be an array' },
+        { error: 'Validation failed', details: validation.error.flatten() },
         { status: 400 }
       );
     }
+
+    const { itemIds, categoryId } = validation.data;
 
     // Update display_order for each item within the category in a transaction
     await prisma.$transaction(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
+import { updateSettingsSchema } from '@/lib/validations/settings.schema';
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,32 +43,35 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      template_id,
-      primary_color,
-      secondary_color,
-      accent_color,
-      background_color,
-      text_color,
-      font_heading,
-      font_body,
-    } = body;
+    const validation = updateSettingsSchema.safeParse(body);
 
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validation.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const data = validation.data;
+
+    // Build update object with validated data
     const updateData: any = {};
 
-    if (template_id !== undefined) updateData.templateId = template_id;
-    if (primary_color !== undefined) updateData.primaryColor = primary_color;
-    if (secondary_color !== undefined) updateData.secondaryColor = secondary_color;
-    if (accent_color !== undefined) updateData.accentColor = accent_color;
-    if (background_color !== undefined) updateData.backgroundColor = background_color;
-    if (text_color !== undefined) updateData.textColor = text_color;
-    if (font_heading !== undefined) updateData.fontHeading = font_heading;
-    if (font_body !== undefined) updateData.fontBody = font_body;
+    if (data.template_id !== undefined) updateData.templateId = data.template_id;
+    if (data.primary_color !== undefined) updateData.primaryColor = data.primary_color;
+    if (data.secondary_color !== undefined) updateData.secondaryColor = data.secondary_color;
+    if (data.accent_color !== undefined) updateData.accentColor = data.accent_color;
+    if (data.background_color !== undefined) updateData.backgroundColor = data.background_color;
+    if (data.text_color !== undefined) updateData.textColor = data.text_color;
+    if (data.font_heading !== undefined) updateData.fontHeading = data.font_heading;
+    if (data.font_body !== undefined) updateData.fontBody = data.font_body;
 
     const settings = await prisma.restaurantSettings.update({
       where: { restaurantId: session.restaurantId },
       data: updateData
     });
+
+    console.log('[SETTINGS UPDATED]', { restaurantId: session.restaurantId });
 
     return NextResponse.json({
       success: true,

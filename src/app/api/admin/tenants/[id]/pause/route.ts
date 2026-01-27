@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
+import { pauseTenantSchema } from '@/lib/validations/admin.schema';
 
 export async function POST(
   request: NextRequest,
@@ -60,9 +61,18 @@ export async function POST(
       );
     }
 
-    // Get optional reason from request body
+    // Get and validate optional reason from request body
     const body = await request.json().catch(() => ({}));
-    const reason = body.reason || 'Paused by admin';
+    const validation = pauseTenantSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validation.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const reason = validation.data.reason || 'Paused by admin';
 
     // Pause the restaurant
     await prisma.restaurant.update({
