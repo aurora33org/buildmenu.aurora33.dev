@@ -2,7 +2,13 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/shared/ui/button';
-import { Select } from '@/components/shared/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/shared/ui/select';
 
 interface PauseDialogProps {
   tenantId: string;
@@ -26,7 +32,7 @@ export function PauseDialog({
   onCancel,
   isOpen,
 }: PauseDialogProps) {
-  const [selectedReason, setSelectedReason] = useState<string>(PAUSE_REASONS[0]);
+  const [selectedReason, setSelectedReason] = useState<string>(PAUSE_REASONS[0] || '');
 
   if (!isOpen) return null;
 
@@ -47,19 +53,20 @@ export function PauseDialog({
           </p>
 
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="pause-reason">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Motivo de pausa
             </label>
-            <Select
-              id="pause-reason"
-              value={selectedReason}
-              onChange={(e) => setSelectedReason(e.target.value)}
-            >
-              {PAUSE_REASONS.map((reason) => (
-                <option key={reason} value={reason}>
-                  {reason}
-                </option>
-              ))}
+            <Select value={selectedReason} onValueChange={setSelectedReason}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un motivo" />
+              </SelectTrigger>
+              <SelectContent>
+                {PAUSE_REASONS.map((reason) => (
+                  <SelectItem key={reason} value={reason}>
+                    {reason}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </div>
 

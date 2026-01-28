@@ -255,7 +255,12 @@ export default async function PublicMenuPage({
     return <ServiceUnavailable />;
   }
 
-  const { restaurant, settings, categories } = data;
+  // TypeScript type guard - at this point data must have restaurant, settings, categories
+  const { restaurant, settings, categories } = data as {
+    restaurant: Restaurant;
+    settings: RestaurantSettings;
+    categories: CategoryWithItems[];
+  };
 
   // Select template based on settings.template_id
   const templateId = settings.template_id || 'classic';

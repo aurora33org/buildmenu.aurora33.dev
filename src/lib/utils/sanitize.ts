@@ -1,9 +1,4 @@
-import DOMPurify from 'dompurify';
-import { JSDOM } from 'jsdom';
-
-// Create a DOMPurify instance for server-side use
-const window = new JSDOM('').window;
-const purify = DOMPurify(window as unknown as Window);
+import DOMPurify from 'isomorphic-dompurify';
 
 /**
  * Sanitizes plain text input by removing all HTML tags
@@ -14,7 +9,7 @@ const purify = DOMPurify(window as unknown as Window);
  */
 export function sanitizeInput(input: string): string {
   // Remove HTML tags but keep text content
-  return purify.sanitize(input, {
+  return DOMPurify.sanitize(input, {
     ALLOWED_TAGS: [],
     KEEP_CONTENT: true
   }).trim();
@@ -29,7 +24,7 @@ export function sanitizeInput(input: string): string {
  */
 export function sanitizeHtml(html: string): string {
   // Allow only safe HTML tags for basic formatting
-  return purify.sanitize(html, {
+  return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li'],
     ALLOWED_ATTR: [] // No attributes allowed
   });

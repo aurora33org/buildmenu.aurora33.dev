@@ -6,9 +6,10 @@ import { sanitizeInput } from '@/lib/utils/sanitize';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const cookieHeader = request.headers.get('cookie');
     const session = await getSessionFromCookie(cookieHeader);
 
@@ -21,7 +22,7 @@ export async function GET(
 
     const category = await prisma.category.findFirst({
       where: {
-        id: params.id,
+        id: id,
         restaurantId: session.restaurantId,
         deletedAt: null
       },
@@ -58,9 +59,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const cookieHeader = request.headers.get('cookie');
     const session = await getSessionFromCookie(cookieHeader);
 
@@ -86,7 +88,7 @@ export async function PATCH(
     // Verify category belongs to user's restaurant
     const existingCategory = await prisma.category.findFirst({
       where: {
-        id: params.id,
+        id: id,
         restaurantId: session.restaurantId,
         deletedAt: null
       }
@@ -110,11 +112,11 @@ export async function PATCH(
     if (data.isVisible !== undefined) sanitizedData.isVisible = data.isVisible;
 
     const category = await prisma.category.update({
-      where: { id: params.id },
+      where: { id: id },
       data: sanitizedData
     });
 
-    console.log('[CATEGORY UPDATED]', { id: params.id, name: data.name });
+    console.log('[CATEGORY UPDATED]', { id: id, name: data.name });
 
     return NextResponse.json({
       success: true,
@@ -132,9 +134,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const cookieHeader = request.headers.get('cookie');
     const session = await getSessionFromCookie(cookieHeader);
 
@@ -148,7 +151,7 @@ export async function DELETE(
     // Verify category belongs to user's restaurant
     const existingCategory = await prisma.category.findFirst({
       where: {
-        id: params.id,
+        id: id,
         restaurantId: session.restaurantId,
         deletedAt: null
       }
@@ -164,16 +167,16 @@ export async function DELETE(
     // Soft delete category and all its items
     await prisma.$transaction([
       prisma.category.update({
-        where: { id: params.id },
+        where: { id: id },
         data: { deletedAt: new Date() }
       }),
       prisma.menuItem.updateMany({
-        where: { categoryId: params.id },
+        where: { categoryId: id },
         data: { deletedAt: new Date() }
       })
     ]);
 
-    console.log('[CATEGORY DELETED]', { id: params.id });
+    console.log('[CATEGORY DELETED]', { id: id });
 
     return NextResponse.json({ success: true });
 

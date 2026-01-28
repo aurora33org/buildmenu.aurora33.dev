@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const restaurantId = session.restaurantId;
+
     const body = await request.json();
     const validation = reorderItemsSchema.safeParse(body);
 
@@ -34,7 +36,7 @@ export async function POST(request: NextRequest) {
           where: {
             id: itemId,
             categoryId: categoryId,
-            restaurantId: session.restaurantId
+            restaurantId: restaurantId
           },
           data: {
             displayOrder: index

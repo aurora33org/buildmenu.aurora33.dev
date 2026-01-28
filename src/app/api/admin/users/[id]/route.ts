@@ -4,9 +4,10 @@ import { getSessionFromCookie } from '@/lib/auth/session';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const cookieHeader = request.headers.get('cookie');
     const session = await getSessionFromCookie(cookieHeader);
 
@@ -18,7 +19,7 @@ export async function DELETE(
     }
 
     // Prevent self-deletion
-    if (session.userId === params.id) {
+    if (session.id === id) {
       return NextResponse.json(
         { error: 'Cannot delete your own account' },
         { status: 400 }
@@ -28,7 +29,7 @@ export async function DELETE(
     // Check if user exists
     const user = await prisma.user.findFirst({
       where: {
-        id: params.id,
+        id: id,
         deletedAt: null
       }
     });
@@ -59,11 +60,11 @@ export async function DELETE(
 
     // Soft delete user
     await prisma.user.update({
-      where: { id: params.id },
+      where: { id: id },
       data: { deletedAt: new Date() }
     });
 
-    console.log('[USER DELETED]', { id: params.id, email: user.email });
+    console.log('[USER DELETED]', { id: id, email: user.email });
 
     return NextResponse.json({ success: true });
 

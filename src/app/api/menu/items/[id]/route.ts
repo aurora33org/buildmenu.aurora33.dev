@@ -6,9 +6,10 @@ import { sanitizeInput } from '@/lib/utils/sanitize';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const cookieHeader = request.headers.get('cookie');
     const session = await getSessionFromCookie(cookieHeader);
 
@@ -21,7 +22,7 @@ export async function GET(
 
     const item = await prisma.menuItem.findFirst({
       where: {
-        id: params.id,
+        id: id,
         restaurantId: session.restaurantId,
         deletedAt: null
       },
@@ -59,9 +60,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const cookieHeader = request.headers.get('cookie');
     const session = await getSessionFromCookie(cookieHeader);
 
@@ -87,7 +89,7 @@ export async function PATCH(
     // Verify item belongs to user's restaurant
     const existingItem = await prisma.menuItem.findFirst({
       where: {
-        id: params.id,
+        id: id,
         restaurantId: session.restaurantId,
         deletedAt: null
       }
@@ -112,7 +114,7 @@ export async function PATCH(
     if (data.isFeatured !== undefined) sanitizedData.isFeatured = data.isFeatured;
 
     const item = await prisma.menuItem.update({
-      where: { id: params.id },
+      where: { id: id },
       data: sanitizedData,
       include: {
         category: {
@@ -123,7 +125,7 @@ export async function PATCH(
       }
     });
 
-    console.log('[ITEM UPDATED]', { id: params.id, name: data.name });
+    console.log('[ITEM UPDATED]', { id: id, name: data.name });
 
     return NextResponse.json({
       success: true,
@@ -144,9 +146,10 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const cookieHeader = request.headers.get('cookie');
     const session = await getSessionFromCookie(cookieHeader);
 
@@ -160,7 +163,7 @@ export async function DELETE(
     // Verify item belongs to user's restaurant
     const existingItem = await prisma.menuItem.findFirst({
       where: {
-        id: params.id,
+        id: id,
         restaurantId: session.restaurantId,
         deletedAt: null
       }
@@ -175,11 +178,11 @@ export async function DELETE(
 
     // Soft delete
     await prisma.menuItem.update({
-      where: { id: params.id },
+      where: { id: id },
       data: { deletedAt: new Date() }
     });
 
-    console.log('[ITEM DELETED]', { id: params.id });
+    console.log('[ITEM DELETED]', { id: id });
 
     return NextResponse.json({ success: true });
 

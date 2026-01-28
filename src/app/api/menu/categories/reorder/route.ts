@@ -15,6 +15,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const restaurantId = session.restaurantId;
+
     const body = await request.json();
     const validation = reorderCategoriesSchema.safeParse(body);
 
@@ -33,7 +35,7 @@ export async function POST(request: NextRequest) {
         prisma.category.updateMany({
           where: {
             id: categoryId,
-            restaurantId: session.restaurantId
+            restaurantId: restaurantId
           },
           data: {
             displayOrder: index
