@@ -53,14 +53,27 @@ export const revalidate = 3600;
 
 // Generate static params for known slugs
 export async function generateStaticParams() {
-  const restaurants = await prisma.restaurant.findMany({
-    where: { deletedAt: null },
-    select: { slug: true },
-  });
+  // If DATABASE_URL is not available (e.g., during build without env vars),
+  // return empty array. Pages will be generated dynamically on first request.
+  if (!process.env.DATABASE_URL) {
+    console.warn('DATABASE_URL not found, skipping static generation for restaurant pages');
+    return [];
+  }
 
-  return restaurants.map((restaurant) => ({
-    slug: restaurant.slug,
-  }));
+  try {
+    const restaurants = await prisma.restaurant.findMany({
+      where: { deletedAt: null },
+      select: { slug: true },
+    });
+
+    return restaurants.map((restaurant) => ({
+      slug: restaurant.slug,
+    }));
+  } catch (error) {
+    console.error('Error generating static params:', error);
+    // Return empty array to allow build to continue
+    return [];
+  }
 }
 
 // Generate metadata for SEO
@@ -71,32 +84,48 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
 
-  const restaurant = await prisma.restaurant.findUnique({
-    where: {
-      slug,
-      deletedAt: null,
-    },
-    select: {
-      name: true,
-      slug: true,
-    },
-  });
-
-  if (!restaurant) {
+  // Default metadata if DATABASE_URL is not available
+  if (!process.env.DATABASE_URL) {
     return {
-      title: 'Restaurante no encontrado',
+      title: 'Menú Digital',
+      description: 'Menú digital de restaurante',
     };
   }
 
-  return {
-    title: `${restaurant.name} - Menú Digital`,
-    description: `Consulta el menú completo de ${restaurant.name}. Platillos, precios y más.`,
-    openGraph: {
+  try {
+    const restaurant = await prisma.restaurant.findUnique({
+      where: {
+        slug,
+        deletedAt: null,
+      },
+      select: {
+        name: true,
+        slug: true,
+      },
+    });
+
+    if (!restaurant) {
+      return {
+        title: 'Restaurante no encontrado',
+      };
+    }
+
+    return {
       title: `${restaurant.name} - Menú Digital`,
-      description: `Consulta el menú completo de ${restaurant.name}`,
-      type: 'website',
-    },
-  };
+      description: `Consulta el menú completo de ${restaurant.name}. Platillos, precios y más.`,
+      openGraph: {
+        title: `${restaurant.name} - Menú Digital`,
+        description: `Consulta el menú completo de ${restaurant.name}`,
+        type: 'website',
+      },
+    };
+  } catch (error) {
+    console.error('Error generating metadata:', error);
+    return {
+      title: 'Menú Digital',
+      description: 'Menú digital de restaurante',
+    };
+  }
 }
 
 async function getMenuData(slug: string) {
