@@ -1,3 +1,7 @@
+'use client';
+
+import { DiamondDivider, SectionFrame } from './ornaments';
+
 interface MenuItem {
   id: string;
   name: string;
@@ -47,60 +51,86 @@ export function ElegantTemplate({
 
   const visibleCategories = categories.filter(cat => cat.is_visible);
 
+  // Helper to convert hex to RGB for CSS variables
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!result) return '212, 175, 55';
+    return `${parseInt(result[1]!, 16)}, ${parseInt(result[2]!, 16)}, ${parseInt(result[3]!, 16)}`;
+  };
+
   return (
     <div
-      className="min-h-screen py-16 px-6"
+      className="min-h-screen py-20 md:py-32 px-6 relative overflow-hidden"
       style={{
-        backgroundColor,
+        background: `radial-gradient(ellipse at center, ${backgroundColor} 0%, ${backgroundColor}ee 100%)`,
         color: textColor,
-        fontFamily: bodyFont
+        fontFamily: bodyFont,
+        // Paper texture
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='noise'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.015'/%3E%3C/svg%3E")`,
+        backgroundBlendMode: 'overlay',
       }}
     >
-      <div className="max-w-4xl mx-auto">
+      {/* Vignette effect */}
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          boxShadow: 'inset 0 0 120px rgba(0,0,0,0.06)',
+          zIndex: 1
+        }}
+      />
+
+      <div className="max-w-[900px] mx-auto relative z-10">
         {/* Header */}
-        <header className="text-center mb-20">
+        <header className="text-center mb-32 md:mb-40">
           <h1
-            className="text-6xl md:text-7xl font-bold tracking-wide mb-6"
+            className="text-5xl md:text-8xl lg:text-9xl font-bold mb-8 md:mb-12 animate-fade-in"
             style={{
-              color: primaryColor,
               fontFamily: headingFont,
-              letterSpacing: '0.05em'
+              letterSpacing: '0.08em',
+              background: `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor}dd 50%, ${primaryColor}aa 100%)`,
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              textShadow: `0px 2px 4px rgba(${hexToRgb(primaryColor)}, 0.15)`,
+              lineHeight: 1.1
             }}
           >
             {restaurantName}
           </h1>
 
           {/* Ornamental Divider */}
-          <div className="flex items-center justify-center gap-4 mt-8">
-            <div
-              className="h-px flex-1 max-w-24"
-              style={{ backgroundColor: accentColor }}
-            />
-            <div
-              className="w-2 h-2 rotate-45"
-              style={{ backgroundColor: primaryColor }}
-            />
-            <div
-              className="h-px flex-1 max-w-24"
-              style={{ backgroundColor: accentColor }}
-            />
+          <div className="mt-12 animate-fade-in-delayed">
+            <DiamondDivider color={primaryColor} />
           </div>
         </header>
 
         {/* Categories */}
-        <div className="space-y-20">
+        <div className="space-y-32 md:space-y-40">
           {visibleCategories.map((category, categoryIndex) => {
             const visibleItems = category.items.filter(item => item.is_visible);
+            const featuredItems = visibleItems.filter(item => item.is_featured);
+            const regularItems = visibleItems.filter(item => !item.is_featured);
+
             if (visibleItems.length === 0) return null;
 
             return (
-              <section key={category.id}>
+              <section
+                key={category.id}
+                className="animate-slide-in"
+                style={{
+                  animationDelay: `${categoryIndex * 150}ms`
+                }}
+              >
                 <h2
-                  className="text-4xl font-bold text-center mb-4"
+                  className="text-3xl md:text-5xl font-bold text-center mb-6"
                   style={{
-                    color: primaryColor,
                     fontFamily: headingFont,
-                    letterSpacing: '0.03em'
+                    fontVariant: 'small-caps',
+                    letterSpacing: '0.12em',
+                    background: `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%)`,
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
                   }}
                 >
                   {category.name}
@@ -108,54 +138,116 @@ export function ElegantTemplate({
 
                 {category.description && (
                   <p
-                    className="text-center text-lg mb-8 italic"
-                    style={{ color: secondaryColor }}
+                    className="text-center text-base md:text-lg mb-12 italic max-w-2xl mx-auto"
+                    style={{
+                      color: secondaryColor,
+                      lineHeight: 1.8,
+                      fontFamily: bodyFont
+                    }}
                   >
                     {category.description}
                   </p>
                 )}
 
                 {/* Ornamental Divider */}
-                <div className="flex items-center justify-center gap-3 mb-12">
-                  <div
-                    className="h-px w-16"
-                    style={{ backgroundColor: accentColor }}
-                  />
-                  <div
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: primaryColor }}
-                  />
-                  <div
-                    className="h-px w-16"
-                    style={{ backgroundColor: accentColor }}
-                  />
+                <div className="mb-16">
+                  <DiamondDivider color={accentColor} width={150} opacity={0.6} />
                 </div>
 
+                {/* Featured Items */}
+                {featuredItems.length > 0 && (
+                  <div className="mb-12">
+                    <SectionFrame color={primaryColor} accentColor={accentColor}>
+                      <div className="space-y-10">
+                        {featuredItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="group"
+                          >
+                            <div className="flex flex-col md:flex-row md:items-baseline md:justify-between gap-3 md:gap-6">
+                              <div className="flex-1">
+                                <h3
+                                  className="text-xl md:text-2xl font-bold mb-3 transition-opacity duration-300 group-hover:opacity-85"
+                                  style={{
+                                    color: textColor,
+                                    fontFamily: headingFont,
+                                    fontFeatureSettings: '"liga" 1',
+                                    letterSpacing: '0.02em'
+                                  }}
+                                >
+                                  {item.name}
+                                </h3>
+                                {item.description && (
+                                  <p
+                                    className="text-sm md:text-base"
+                                    style={{
+                                      color: secondaryColor,
+                                      fontFamily: bodyFont,
+                                      lineHeight: 1.8
+                                    }}
+                                  >
+                                    {item.description}
+                                  </p>
+                                )}
+                              </div>
+                              {item.base_price !== null && (
+                                <div
+                                  className="text-2xl md:text-3xl font-bold whitespace-nowrap transition-transform duration-300 group-hover:scale-105"
+                                  style={{
+                                    background: `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%)`,
+                                    WebkitBackgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    backgroundClip: 'text',
+                                    fontFamily: headingFont,
+                                    fontFeatureSettings: '"tnum" 1',
+                                    textDecoration: 'underline',
+                                    textDecorationColor: accentColor,
+                                    textDecorationThickness: '1px',
+                                    textUnderlineOffset: '6px'
+                                  }}
+                                >
+                                  ${item.base_price.toFixed(2)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionFrame>
+                  </div>
+                )}
+
+                {/* Regular Items */}
                 <div className="space-y-8">
-                  {visibleItems.map((item) => (
+                  {regularItems.map((item) => (
                     <div
                       key={item.id}
-                      className="group transition-all duration-300 hover:translate-x-2"
+                      className="group transition-all duration-300"
                     >
-                      <div className="flex items-baseline justify-between gap-4 pb-4 border-b border-opacity-20"
-                        style={{ borderColor: accentColor }}
+                      <div
+                        className="flex flex-col md:flex-row md:items-baseline md:justify-between gap-3 md:gap-6 pb-6"
+                        style={{
+                          borderBottom: `1px solid rgba(${hexToRgb(accentColor)}, 0.15)`
+                        }}
                       >
                         <div className="flex-1">
                           <h3
-                            className="text-2xl font-semibold mb-2 transition-colors duration-300"
+                            className="text-lg md:text-xl font-semibold mb-2 transition-opacity duration-300 group-hover:opacity-85"
                             style={{
                               color: textColor,
-                              fontFamily: headingFont
+                              fontFamily: headingFont,
+                              fontFeatureSettings: '"liga" 1'
                             }}
                           >
                             {item.name}
                           </h3>
                           {item.description && (
                             <p
-                              className="text-base leading-relaxed"
+                              className="text-sm md:text-base"
                               style={{
                                 color: secondaryColor,
-                                fontFamily: bodyFont
+                                fontFamily: bodyFont,
+                                lineHeight: 1.8
                               }}
                             >
                               {item.description}
@@ -164,10 +256,12 @@ export function ElegantTemplate({
                         </div>
                         {item.base_price !== null && (
                           <div
-                            className="text-2xl font-bold whitespace-nowrap transition-all duration-300 group-hover:scale-110"
+                            className="text-xl md:text-2xl font-bold whitespace-nowrap transition-transform duration-300 group-hover:scale-105"
                             style={{
                               color: primaryColor,
-                              fontFamily: headingFont
+                              fontFamily: headingFont,
+                              fontFeatureSettings: '"tnum" 1',
+                              textShadow: `0px 1px 1px rgba(${hexToRgb(primaryColor)}, 0.1)`
                             }}
                           >
                             ${item.base_price.toFixed(2)}
@@ -180,27 +274,8 @@ export function ElegantTemplate({
 
                 {/* Section Divider (except last) */}
                 {categoryIndex < visibleCategories.length - 1 && (
-                  <div className="flex items-center justify-center gap-4 mt-16">
-                    <div
-                      className="h-px flex-1 max-w-32"
-                      style={{ backgroundColor: accentColor, opacity: 0.5 }}
-                    />
-                    <div
-                      className="w-3 h-3 rotate-45"
-                      style={{ backgroundColor: primaryColor, opacity: 0.3 }}
-                    />
-                    <div
-                      className="w-2 h-2 rotate-45"
-                      style={{ backgroundColor: accentColor }}
-                    />
-                    <div
-                      className="w-3 h-3 rotate-45"
-                      style={{ backgroundColor: primaryColor, opacity: 0.3 }}
-                    />
-                    <div
-                      className="h-px flex-1 max-w-32"
-                      style={{ backgroundColor: accentColor, opacity: 0.5 }}
-                    />
+                  <div className="mt-24 md:mt-32">
+                    <DiamondDivider color={accentColor} width={250} opacity={0.4} />
                   </div>
                 )}
               </section>
@@ -209,21 +284,63 @@ export function ElegantTemplate({
         </div>
 
         {/* Footer Ornament */}
-        <div className="flex items-center justify-center gap-4 mt-24">
-          <div
-            className="h-px w-24"
-            style={{ backgroundColor: accentColor, opacity: 0.3 }}
-          />
-          <div
-            className="w-1.5 h-1.5 rotate-45"
-            style={{ backgroundColor: primaryColor }}
-          />
-          <div
-            className="h-px w-24"
-            style={{ backgroundColor: accentColor, opacity: 0.3 }}
-          />
+        <div className="mt-32 md:mt-40">
+          <DiamondDivider color={primaryColor} opacity={0.3} />
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slide-in {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fade-in {
+          animation: fade-in 0.8s ease-out forwards;
+        }
+
+        .animate-fade-in-delayed {
+          animation: fade-in 0.8s ease-out 0.3s forwards;
+          opacity: 0;
+        }
+
+        .animate-slide-in {
+          animation: slide-in 0.6s ease-out forwards;
+          opacity: 0;
+        }
+
+        /* Shimmer effect for gold elements */
+        @keyframes shimmer {
+          0% {
+            background-position: -100% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
+        }
+
+        h1:hover {
+          background-size: 200% 100%;
+          animation: shimmer 3s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
