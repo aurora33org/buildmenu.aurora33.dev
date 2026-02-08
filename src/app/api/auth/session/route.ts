@@ -4,7 +4,7 @@ import { getSessionFromCookie } from '@/lib/auth/session';
 export async function GET(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
     if (!session) {
       return NextResponse.json(
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         email: session.email,
         name: session.name,
         role: session.role,
-        restaurant_id: session.restaurant_id,
+        restaurant_id: session.restaurantId,
       },
     });
   } catch (error) {

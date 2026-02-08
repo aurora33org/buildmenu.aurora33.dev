@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { hashPassword } from '@/lib/auth/password';
 import { createTenantSimpleSchema } from '@/lib/validations/tenant.schema';
-import { randomUUID } from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
     // Verify user is super_admin
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
     if (!session || session.role !== 'super_admin') {
       return NextResponse.json(
@@ -30,10 +29,13 @@ export async function POST(request: NextRequest) {
     }
 
     const data = validation.data;
-    const db = getDatabase();
 
     // Check if email is unique
-    const existingEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(data.email);
+    const existingEmail = await prisma.user.findUnique({
+      where: { email: data.email },
+      select: { id: true }
+    });
+
     if (existingEmail) {
       return NextResponse.json(
         { error: 'Este email ya está registrado' },
@@ -44,26 +46,23 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await hashPassword(data.password);
 
-    // Create user ID
-    const userId = randomUUID();
-
     // Create user WITHOUT restaurant_id (will be set during onboarding)
-    db.prepare(`
-      INSERT INTO users (id, email, password_hash, name, role, restaurant_id)
-      VALUES (?, ?, ?, ?, 'tenant_user', NULL)
-    `).run(
-      userId,
-      data.email,
-      passwordHash,
-      data.name
-    );
-
-    // Fetch created user
-    const user = db.prepare(`
-      SELECT id, email, name, role, created_at
-      FROM users
-      WHERE id = ?
-    `).get(userId);
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        passwordHash: passwordHash,
+        name: data.name,
+        role: 'tenant_user',
+        restaurantId: null
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        createdAt: true
+      }
+    });
 
     console.log('[USER CREATED]', { email: data.email, requiresOnboarding: true });
 
@@ -87,7 +86,7 @@ export async function GET(request: NextRequest) {
   try {
     // Verify user is super_admin
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
     if (!session || session.role !== 'super_admin') {
       return NextResponse.json(
@@ -96,35 +95,97 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const db = getDatabase();
-
     // Get all tenant users (with or without restaurant) with analytics
-    const tenants = db.prepare(`
-      SELECT
-        u.id,
-        u.email,
-        u.name,
-        u.restaurant_id,
-        u.created_at,
-        r.id as restaurant_id,
-        r.name as restaurant_name,
-        r.slug,
-        r.is_active,
-        r.onboarding_completed,
-        r.paused_at,
-        r.paused_reason,
-        rs.template_id,
-        (SELECT COUNT(*) FROM categories WHERE restaurant_id = r.id AND deleted_at IS NULL) as categories_count,
-        (SELECT COUNT(*) FROM menu_items WHERE restaurant_id = r.id AND deleted_at IS NULL) as items_count,
-        (SELECT COALESCE(SUM(page_views), 0) FROM usage_metrics WHERE restaurant_id = r.id) as total_views,
-        (SELECT COALESCE(SUM(page_views), 0) FROM usage_metrics WHERE restaurant_id = r.id AND date >= date('now', '-7 days')) as views_last_7_days,
-        (SELECT COALESCE(SUM(bandwidth_bytes), 0) FROM usage_metrics WHERE restaurant_id = r.id AND date >= date('now', '-30 days')) as bandwidth_30d
-      FROM users u
-      LEFT JOIN restaurants r ON r.id = u.restaurant_id
-      LEFT JOIN restaurant_settings rs ON rs.restaurant_id = r.id
-      WHERE u.role = 'tenant_user' AND u.deleted_at IS NULL
-      ORDER BY u.created_at DESC
-    `).all();
+    const users = await prisma.user.findMany({
+      where: {
+        role: 'tenant_user',
+        deletedAt: null
+      },
+      include: {
+        restaurant: {
+          include: {
+            settings: {
+              select: {
+                templateId: true
+              }
+            },
+            categories: {
+              where: { deletedAt: null },
+              select: { id: true }
+            },
+            menuItems: {
+              where: { deletedAt: null },
+              select: { id: true }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    // Calculate metrics for each user
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const tenants = await Promise.all(users.map(async (user) => {
+      let totalViews = 0;
+      let viewsLast7Days = 0;
+      let bandwidth30d = 0;
+
+      if (user.restaurant) {
+        // Get total views
+        const totalViewsResult = await prisma.usageMetric.aggregate({
+          where: { restaurantId: user.restaurant.id },
+          _sum: { pageViews: true }
+        });
+        totalViews = totalViewsResult._sum.pageViews ?? 0;
+
+        // Get views last 7 days
+        const views7DaysResult = await prisma.usageMetric.aggregate({
+          where: {
+            restaurantId: user.restaurant.id,
+            date: { gte: sevenDaysAgo }
+          },
+          _sum: { pageViews: true }
+        });
+        viewsLast7Days = views7DaysResult._sum.pageViews ?? 0;
+
+        // Get bandwidth last 30 days
+        const bandwidth30dResult = await prisma.usageMetric.aggregate({
+          where: {
+            restaurantId: user.restaurant.id,
+            date: { gte: thirtyDaysAgo }
+          },
+          _sum: { bandwidthBytes: true }
+        });
+        bandwidth30d = Number(bandwidth30dResult._sum.bandwidthBytes ?? 0);
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        restaurant_id: user.restaurantId,
+        created_at: user.createdAt,
+        restaurant_name: user.restaurant?.name ?? null,
+        slug: user.restaurant?.slug ?? null,
+        is_active: user.restaurant?.isActive ?? null,
+        onboarding_completed: user.restaurant?.onboardingCompleted ?? null,
+        paused_at: user.restaurant?.pausedAt ?? null,
+        paused_reason: user.restaurant?.pausedReason ?? null,
+        template_id: user.restaurant?.settings?.templateId ?? null,
+        categories_count: user.restaurant?.categories.length ?? 0,
+        items_count: user.restaurant?.menuItems.length ?? 0,
+        total_views: totalViews,
+        views_last_7_days: viewsLast7Days,
+        bandwidth_30d: bandwidth30d
+      };
+    }));
 
     return NextResponse.json({ tenants });
 

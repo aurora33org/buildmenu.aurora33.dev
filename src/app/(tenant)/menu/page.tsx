@@ -7,6 +7,17 @@ import { Label } from '@/components/shared/ui/label';
 import { Textarea } from '@/components/shared/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/shared/ui/card';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -24,6 +35,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage, handleApiError } from '@/lib/utils/error-handler';
 
 interface Category {
   id: string;
@@ -49,12 +62,16 @@ interface MenuItem {
 function SortableCategory({
   category,
   onAddItem,
+  onEditCategory,
   onDeleteCategory,
+  isDeleting,
   children,
 }: {
   category: Category;
   onAddItem: () => void;
+  onEditCategory: () => void;
   onDeleteCategory: () => void;
+  isDeleting: boolean;
   children: React.ReactNode;
 }) {
   const {
@@ -99,13 +116,38 @@ function SortableCategory({
               <Button size="sm" onClick={onAddItem}>
                 Agregar Item
               </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={onDeleteCategory}
-              >
-                Eliminar
+              <Button size="sm" variant="outline" onClick={onEditCategory}>
+                Editar
               </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? 'Eliminando...' : 'Eliminar'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Eliminar categoría?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Está a punto de eliminar la categoría <strong>{category.name}</strong> y todos sus items ({category.items_count}).
+                      Esta acción no se puede deshacer.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={onDeleteCategory}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Eliminar
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </CardHeader>
@@ -119,10 +161,14 @@ function SortableCategory({
 
 function SortableItem({
   item,
+  onEdit,
   onDelete,
+  isDeleting,
 }: {
   item: MenuItem;
+  onEdit: () => void;
   onDelete: () => void;
+  isDeleting: boolean;
 }) {
   const {
     attributes,
@@ -165,23 +211,55 @@ function SortableItem({
           )}
         </div>
       </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={onDelete}
-      >
-        Eliminar
-      </Button>
+      <div className="flex gap-2">
+        <Button size="sm" variant="ghost" onClick={onEdit}>
+          Editar
+        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Eliminando...' : 'Eliminar'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar item?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Está a punto de eliminar el item <strong>{item.name}</strong>.
+                Esta acción no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={onDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 }
 
 export default function MenuEditorPage() {
+  const { toast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCategoryForm, setShowCategoryForm] = useState(false);
   const [showItemForm, setShowItemForm] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   const [categoryForm, setCategoryForm] = useState({
     name: '',
@@ -213,13 +291,21 @@ export default function MenuEditorPage() {
         fetch('/api/menu/items'),
       ]);
 
+      if (!categoriesRes.ok || !itemsRes.ok) {
+        throw new Error('Failed to fetch menu data');
+      }
+
       const categoriesData = await categoriesRes.json();
       const itemsData = await itemsRes.json();
 
       setCategories(categoriesData.categories || []);
       setItems(itemsData.items || []);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -242,9 +328,24 @@ export default function MenuEditorPage() {
         setCategoryForm({ name: '', description: '' });
         setShowCategoryForm(false);
         fetchData();
+        toast({
+          title: "Éxito",
+          description: "Categoría creada correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error creating category:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -267,31 +368,183 @@ export default function MenuEditorPage() {
         setItemForm({ categoryId: '', name: '', description: '', basePrice: '' });
         setShowItemForm(false);
         fetchData();
+        toast({
+          title: "Éxito",
+          description: "Item creado correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error('Error creating item:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
   const handleDeleteCategory = async (id: string) => {
-    if (!confirm('¿Eliminar esta categoría y todos sus items?')) return;
+    setDeletingCategoryId(id);
 
     try {
-      await fetch(`/api/menu/categories/${id}`, { method: 'DELETE' });
-      fetchData();
+      const response = await fetch(`/api/menu/categories/${id}`, { method: 'DELETE' });
+
+      if (response.ok) {
+        fetchData();
+        toast({
+          title: "Éxito",
+          description: "Categoría eliminada correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      console.error('Error deleting category:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingCategoryId(null);
     }
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (!confirm('¿Eliminar este item?')) return;
+    setDeletingItemId(id);
 
     try {
-      await fetch(`/api/menu/items/${id}`, { method: 'DELETE' });
-      fetchData();
+      const response = await fetch(`/api/menu/items/${id}`, { method: 'DELETE' });
+
+      if (response.ok) {
+        fetchData();
+        toast({
+          title: "Éxito",
+          description: "Item eliminado correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      console.error('Error deleting item:', error);
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
+  const handleEditCategory = (category: Category) => {
+    setEditingCategory(category);
+    setCategoryForm({
+      name: category.name,
+      description: category.description || '',
+    });
+  };
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+
+    try {
+      const response = await fetch(`/api/menu/categories/${editingCategory.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: categoryForm.name,
+          description: categoryForm.description || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        setCategoryForm({ name: '', description: '' });
+        setEditingCategory(null);
+        fetchData();
+        toast({
+          title: "Éxito",
+          description: "Categoría actualizada correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditItem = (item: MenuItem) => {
+    setEditingItem(item);
+    setItemForm({
+      categoryId: item.category_id,
+      name: item.name,
+      description: item.description || '',
+      basePrice: item.base_price !== null ? item.base_price.toString() : '',
+    });
+  };
+
+  const handleUpdateItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+
+    try {
+      const response = await fetch(`/api/menu/items/${editingItem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: itemForm.name,
+          description: itemForm.description || undefined,
+          basePrice: itemForm.basePrice ? parseFloat(itemForm.basePrice) : null,
+        }),
+      });
+
+      if (response.ok) {
+        setItemForm({ categoryId: '', name: '', description: '', basePrice: '' });
+        setEditingItem(null);
+        fetchData();
+        toast({
+          title: "Éxito",
+          description: "Item actualizado correctamente",
+        });
+      } else {
+        const errorMessage = await handleApiError(response);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -422,6 +675,48 @@ export default function MenuEditorPage() {
         </Card>
       )}
 
+      {/* Edit Category Form */}
+      {editingCategory && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Editar Categoría</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdateCategory} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="editCategoryName">Nombre *</Label>
+                <Input
+                  id="editCategoryName"
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                  placeholder="Ej: Platillos Principales"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editCategoryDesc">Descripción</Label>
+                <Textarea
+                  id="editCategoryDesc"
+                  value={categoryForm.description}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descripción opcional..."
+                  rows={2}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit">Guardar Cambios</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setEditingCategory(null);
+                  setCategoryForm({ name: '', description: '' });
+                }}>
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Categories & Items */}
       {categories.length === 0 ? (
         <Card>
@@ -453,7 +748,9 @@ export default function MenuEditorPage() {
                     setItemForm(prev => ({ ...prev, categoryId: category.id }));
                     setShowItemForm(true);
                   }}
+                  onEditCategory={() => handleEditCategory(category)}
                   onDeleteCategory={() => handleDeleteCategory(category.id)}
+                  isDeleting={deletingCategoryId === category.id}
                 >
                   {getItemsByCategory(category.id).length === 0 ? (
                     <p className="text-sm text-muted-foreground">
@@ -474,7 +771,9 @@ export default function MenuEditorPage() {
                             <SortableItem
                               key={item.id}
                               item={item}
+                              onEdit={() => handleEditItem(item)}
                               onDelete={() => handleDeleteItem(item.id)}
+                              isDeleting={deletingItemId === item.id}
                             />
                           ))}
                         </div>
@@ -539,11 +838,68 @@ export default function MenuEditorPage() {
         </Card>
       )}
 
+      {/* Edit Item Form Modal */}
+      {editingItem && (
+        <Card className="fixed inset-x-4 top-20 max-w-2xl mx-auto z-50 shadow-lg">
+          <CardHeader>
+            <CardTitle>Editar Item</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdateItem} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="editItemName">Nombre *</Label>
+                <Input
+                  id="editItemName"
+                  value={itemForm.name}
+                  onChange={(e) => setItemForm(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                  placeholder="Ej: Tacos al Pastor"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editItemDesc">Descripción</Label>
+                <Textarea
+                  id="editItemDesc"
+                  value={itemForm.description}
+                  onChange={(e) => setItemForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Descripción del platillo..."
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editItemPrice">Precio</Label>
+                <Input
+                  id="editItemPrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={itemForm.basePrice}
+                  onChange={(e) => setItemForm(prev => ({ ...prev, basePrice: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit">Guardar Cambios</Button>
+                <Button type="button" variant="outline" onClick={() => {
+                  setEditingItem(null);
+                  setItemForm({ categoryId: '', name: '', description: '', basePrice: '' });
+                }}>
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Overlay for modal */}
-      {showItemForm && (
+      {(showItemForm || editingItem) && (
         <div
           className="fixed inset-0 bg-black/50 z-40"
-          onClick={() => setShowItemForm(false)}
+          onClick={() => {
+            setShowItemForm(false);
+            setEditingItem(null);
+          }}
         />
       )}
     </div>

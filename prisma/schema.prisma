@@ -1,0 +1,289 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  super_admin
+  tenant_user
+}
+
+enum TemplateId {
+  classic
+  modern
+  elegant
+  minimal
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  role          UserRole  @default(tenant_user)
+  restaurantId  String?   @map("restaurant_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  // Relations
+  restaurant    Restaurant? @relation("UserMembership", fields: [restaurantId], references: [id], onDelete: SetNull)
+  ownedRestaurants Restaurant[] @relation("RestaurantOwner")
+  sessions      Session[]
+
+  @@index([email])
+  @@index([restaurantId])
+  @@map("users")
+}
+
+model Restaurant {
+  id                     String    @id @default(uuid())
+  ownerId                String    @map("owner_id")
+  name                   String
+  slug                   String    @unique
+  description            String?
+  logoUrl                String?   @map("logo_url")
+  contactEmail           String?   @map("contact_email")
+  contactPhone           String?   @map("contact_phone")
+  address                String?
+  timezone               String    @default("America/Mexico_City")
+  currency               String    @default("MXN")
+  isActive               Boolean   @default(true) @map("is_active")
+
+  // Onboarding fields (from migration 002)
+  facebookUrl            String?   @map("facebook_url")
+  instagramHandle        String?   @map("instagram_handle")
+  tiktokHandle           String?   @map("tiktok_handle")
+  onboardingCompleted    Boolean   @default(false) @map("onboarding_completed")
+  onboardingCompletedAt  DateTime? @map("onboarding_completed_at")
+
+  // Pause/Unpause fields
+  pausedAt               DateTime? @map("paused_at")
+  pausedReason           String?   @map("paused_reason")
+
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  deletedAt              DateTime? @map("deleted_at")
+
+  // Relations
+  owner                  User      @relation("RestaurantOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members                User[]    @relation("UserMembership")
+  settings               RestaurantSettings?
+  categories             Category[]
+  menuItems              MenuItem[]
+  menuViews              MenuView[]
+  usageMetrics           UsageMetric[]
+
+  @@index([slug])
+  @@index([ownerId])
+  @@index([onboardingCompleted])
+  @@index([pausedAt])
+  @@map("restaurants")
+}
+
+model RestaurantSettings {
+  id               String      @id @default(uuid())
+  restaurantId     String      @unique @map("restaurant_id")
+  templateId       TemplateId  @default(classic) @map("template_id")
+  primaryColor     String      @default("#000000") @map("primary_color")
+  secondaryColor   String      @default("#666666") @map("secondary_color")
+  accentColor      String      @default("#ff6b6b") @map("accent_color")
+  backgroundColor  String      @default("#ffffff") @map("background_color")
+  textColor        String      @default("#000000") @map("text_color")
+  fontHeading      String      @default("Inter") @map("font_heading")
+  fontBody         String      @default("Inter") @map("font_body")
+  customCss        String?     @map("custom_css")
+  showPrices       Boolean     @default(true) @map("show_prices")
+  showDescriptions Boolean     @default(true) @map("show_descriptions")
+  showAllergens    Boolean     @default(true) @map("show_allergens")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant       Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_settings")
+}
+
+model Category {
+  id              String    @id @default(uuid())
+  restaurantId    String    @map("restaurant_id")
+  name            String
+  description     String?
+  displayOrder    Int       @default(0) @map("display_order")
+  isVisible       Boolean   @default(true) @map("is_visible")
+  icon            String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  // Relations
+  restaurant      Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItems       MenuItem[]
+  availabilitySchedules AvailabilitySchedule[]
+
+  @@index([restaurantId])
+  @@map("categories")
+}
+
+model MenuItem {
+  id              String    @id @default(uuid())
+  categoryId      String    @map("category_id")
+  restaurantId    String    @map("restaurant_id")
+  name            String
+  description     String?
+  basePrice       Float?    @map("base_price")
+  displayOrder    Int       @default(0) @map("display_order")
+  isVisible       Boolean   @default(true) @map("is_visible")
+  isFeatured      Boolean   @default(false) @map("is_featured")
+  imageUrl        String?   @map("image_url")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  // Relations
+  category        Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  priceVariants   PriceVariant[]
+  itemVariants    ItemVariant[]
+  tags            ItemTag[]
+  availabilitySchedules AvailabilitySchedule[]
+
+  @@index([categoryId])
+  @@index([restaurantId])
+  @@map("menu_items")
+}
+
+model PriceVariant {
+  id            String   @id @default(uuid())
+  itemId        String   @map("item_id")
+  name          String
+  price         Float
+  displayOrder  Int      @default(0) @map("display_order")
+  isDefault     Boolean  @default(false) @map("is_default")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  item          MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("price_variants")
+}
+
+model ItemVariant {
+  id            String   @id @default(uuid())
+  itemId        String   @map("item_id")
+  name          String
+  priceModifier Float    @default(0.0) @map("price_modifier")
+  displayOrder  Int      @default(0) @map("display_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  item          MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@map("item_variants")
+}
+
+model Tag {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  displayName String   @map("display_name")
+  icon        String?
+  color       String   @default("#gray")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  items       ItemTag[]
+
+  @@map("tags")
+}
+
+model ItemTag {
+  itemId  String   @map("item_id")
+  tagId   String   @map("tag_id")
+
+  // Relations
+  item    MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag     Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, tagId])
+  @@map("item_tags")
+}
+
+model AvailabilitySchedule {
+  id          String    @id @default(uuid())
+  itemId      String?   @map("item_id")
+  categoryId  String?   @map("category_id")
+  dayOfWeek   Int       @map("day_of_week") // 0-6 (Sunday-Saturday)
+  startTime   String    @map("start_time")
+  endTime     String    @map("end_time")
+  isAvailable Boolean   @default(true) @map("is_available")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  item        MenuItem? @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("availability_schedules")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+model MenuView {
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  viewedAt     DateTime @default(now()) @map("viewed_at")
+  userAgent    String?  @map("user_agent")
+  ipAddress    String?  @map("ip_address")
+
+  // Relations
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@map("menu_views")
+}
+
+model UsageMetric {
+  id              String   @id @default(uuid())
+  restaurantId    String   @map("restaurant_id")
+  date            DateTime @db.Date
+  pageViews       Int      @default(0) @map("page_views")
+  uniqueVisitors  Int      @default(0) @map("unique_visitors")
+  bandwidthBytes  BigInt   @default(0) @map("bandwidth_bytes")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, date])
+  @@index([restaurantId, date])
+  @@map("usage_metrics")
+}

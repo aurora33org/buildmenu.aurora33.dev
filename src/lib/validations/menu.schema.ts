@@ -29,3 +29,16 @@ export const updateMenuItemSchema = createMenuItemSchema.partial().omit({ catego
 
 export type CreateMenuItemInput = z.infer<typeof createMenuItemSchema>;
 export type UpdateMenuItemInput = z.infer<typeof updateMenuItemSchema>;
+
+// Reorder schemas
+export const reorderCategoriesSchema = z.object({
+  categoryIds: z.array(z.string().uuid('Invalid category ID')).min(1, 'At least one category ID is required'),
+});
+
+export const reorderItemsSchema = z.object({
+  categoryId: z.string().uuid('Invalid category ID'),
+  itemIds: z.array(z.string().uuid('Invalid item ID')).min(1, 'At least one item ID is required'),
+});
+
+export type ReorderCategoriesInput = z.infer<typeof reorderCategoriesSchema>;
+export type ReorderItemsInput = z.infer<typeof reorderItemsSchema>;

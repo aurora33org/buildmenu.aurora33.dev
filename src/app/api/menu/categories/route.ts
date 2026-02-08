@@ -1,40 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { createCategorySchema } from '@/lib/validations/menu.schema';
-import { randomUUID } from 'crypto';
+import { sanitizeInput } from '@/lib/utils/sanitize';
 
 export async function GET(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || session.role !== 'tenant_user' || !session.restaurant_id) {
+    if (!session || session.role !== 'tenant_user' || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const db = getDatabase();
+    const categories = await prisma.category.findMany({
+      where: {
+        restaurantId: session.restaurantId,
+        deletedAt: null
+      },
+      include: {
+        menuItems: {
+          where: { deletedAt: null },
+          select: { id: true }
+        }
+      },
+      orderBy: [
+        { displayOrder: 'asc' },
+        { createdAt: 'asc' }
+      ]
+    });
 
-    const categories = db.prepare(`
-      SELECT
-        id,
-        name,
-        description,
-        display_order,
-        is_visible,
-        icon,
-        created_at,
-        (SELECT COUNT(*) FROM menu_items WHERE category_id = categories.id AND deleted_at IS NULL) as items_count
-      FROM categories
-      WHERE restaurant_id = ?
-        AND deleted_at IS NULL
-      ORDER BY display_order ASC, created_at ASC
-    `).all(session.restaurant_id);
+    const categoriesWithCount = categories.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      description: cat.description,
+      display_order: cat.displayOrder,
+      is_visible: cat.isVisible,
+      icon: cat.icon,
+      created_at: cat.createdAt,
+      items_count: cat.menuItems.length
+    }));
 
-    return NextResponse.json({ categories });
+    return NextResponse.json({ categories: categoriesWithCount });
 
   } catch (error) {
     console.error('List categories error:', error);
@@ -48,9 +58,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || session.role !== 'tenant_user' || !session.restaurant_id) {
+    if (!session || session.role !== 'tenant_user' || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -68,27 +78,23 @@ export async function POST(request: NextRequest) {
     }
 
     const data = validation.data;
-    const db = getDatabase();
-    const categoryId = randomUUID();
 
-    db.prepare(`
-      INSERT INTO categories (id, restaurant_id, name, description, display_order, is_visible, icon)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      categoryId,
-      session.restaurant_id,
-      data.name,
-      data.description || null,
-      data.displayOrder,
-      data.isVisible ? 1 : 0,
-      data.icon || null
-    );
+    // Sanitize text inputs
+    const sanitizedName = sanitizeInput(data.name);
+    const sanitizedDescription = data.description ? sanitizeInput(data.description) : null;
 
-    const category = db.prepare(`
-      SELECT * FROM categories WHERE id = ?
-    `).get(categoryId);
+    const category = await prisma.category.create({
+      data: {
+        restaurantId: session.restaurantId,
+        name: sanitizedName,
+        description: sanitizedDescription,
+        displayOrder: data.displayOrder,
+        isVisible: data.isVisible,
+        icon: data.icon || null
+      }
+    });
 
-    console.log('[CATEGORY CREATED]', { name: data.name, restaurant_id: session.restaurant_id });
+    console.log('[CATEGORY CREATED]', { name: data.name, restaurant_id: session.restaurantId });
 
     return NextResponse.json({
       success: true,

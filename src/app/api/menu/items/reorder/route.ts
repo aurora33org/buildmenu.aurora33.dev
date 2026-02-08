@@ -1,43 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
+import { reorderItemsSchema } from '@/lib/validations/menu.schema';
 
 export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || !session.restaurant_id) {
+    if (!session || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const body = await request.json();
-    const { itemIds, categoryId } = body as { itemIds: string[]; categoryId: string };
+    const restaurantId = session.restaurantId;
 
-    if (!Array.isArray(itemIds)) {
+    const body = await request.json();
+    const validation = reorderItemsSchema.safeParse(body);
+
+    if (!validation.success) {
       return NextResponse.json(
-        { error: 'itemIds must be an array' },
+        { error: 'Validation failed', details: validation.error.flatten() },
         { status: 400 }
       );
     }
 
-    const db = getDatabase();
+    const { itemIds, categoryId } = validation.data;
 
-    // Update display_order for each item within the category
-    const updateOrder = db.transaction(() => {
-      itemIds.forEach((itemId, index) => {
-        db.prepare(`
-          UPDATE menu_items
-          SET display_order = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ? AND category_id = ? AND restaurant_id = ?
-        `).run(index, itemId, categoryId, session.restaurant_id);
-      });
-    });
-
-    updateOrder();
+    // Update display_order for each item within the category in a transaction
+    await prisma.$transaction(
+      itemIds.map((itemId, index) =>
+        prisma.menuItem.updateMany({
+          where: {
+            id: itemId,
+            categoryId: categoryId,
+            restaurantId: restaurantId
+          },
+          data: {
+            displayOrder: index
+          }
+        })
+      )
+    );
 
     return NextResponse.json({ success: true });
 

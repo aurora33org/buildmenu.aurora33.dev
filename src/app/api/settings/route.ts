@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
+import { updateSettingsSchema } from '@/lib/validations/settings.schema';
 
 export async function GET(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || !session.restaurant_id) {
+    if (!session || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const db = getDatabase();
-
-    const settings = db.prepare(`
-      SELECT * FROM restaurant_settings WHERE restaurant_id = ?
-    `).get(session.restaurant_id);
+    const settings = await prisma.restaurantSettings.findUnique({
+      where: { restaurantId: session.restaurantId }
+    });
 
     return NextResponse.json({ settings });
 
@@ -34,9 +33,9 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || !session.restaurant_id) {
+    if (!session || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -44,47 +43,35 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      template_id,
-      primary_color,
-      secondary_color,
-      accent_color,
-      background_color,
-      text_color,
-      font_heading,
-      font_body,
-    } = body;
+    const validation = updateSettingsSchema.safeParse(body);
 
-    const db = getDatabase();
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validation.error.flatten() },
+        { status: 400 }
+      );
+    }
 
-    db.prepare(`
-      UPDATE restaurant_settings
-      SET
-        template_id = COALESCE(?, template_id),
-        primary_color = ?,
-        secondary_color = ?,
-        accent_color = ?,
-        background_color = ?,
-        text_color = ?,
-        font_heading = ?,
-        font_body = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE restaurant_id = ?
-    `).run(
-      template_id,
-      primary_color,
-      secondary_color,
-      accent_color,
-      background_color,
-      text_color,
-      font_heading,
-      font_body,
-      session.restaurant_id
-    );
+    const data = validation.data;
 
-    const settings = db.prepare(`
-      SELECT * FROM restaurant_settings WHERE restaurant_id = ?
-    `).get(session.restaurant_id);
+    // Build update object with validated data
+    const updateData: any = {};
+
+    if (data.template_id !== undefined) updateData.templateId = data.template_id;
+    if (data.primary_color !== undefined) updateData.primaryColor = data.primary_color;
+    if (data.secondary_color !== undefined) updateData.secondaryColor = data.secondary_color;
+    if (data.accent_color !== undefined) updateData.accentColor = data.accent_color;
+    if (data.background_color !== undefined) updateData.backgroundColor = data.background_color;
+    if (data.text_color !== undefined) updateData.textColor = data.text_color;
+    if (data.font_heading !== undefined) updateData.fontHeading = data.font_heading;
+    if (data.font_body !== undefined) updateData.fontBody = data.font_body;
+
+    const settings = await prisma.restaurantSettings.update({
+      where: { restaurantId: session.restaurantId },
+      data: updateData
+    });
+
+    console.log('[SETTINGS UPDATED]', { restaurantId: session.restaurantId });
 
     return NextResponse.json({
       success: true,

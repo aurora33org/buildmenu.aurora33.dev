@@ -1,26 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import QRCode from 'qrcode';
 
 export async function GET(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || !session.restaurant_id) {
+    if (!session || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const db = getDatabase();
-
     // Get restaurant slug
-    const restaurant = db.prepare(`
-      SELECT slug FROM restaurants WHERE id = ?
-    `).get(session.restaurant_id) as { slug: string } | undefined;
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: session.restaurantId },
+      select: { slug: true }
+    });
 
     if (!restaurant) {
       return NextResponse.json(

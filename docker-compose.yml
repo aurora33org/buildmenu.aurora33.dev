@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: menu-create-postgres
+    environment:
+      POSTGRES_USER: menu_user
+      POSTGRES_PASSWORD: menu_password
+      POSTGRES_DB: menu_create_dev
+    ports:
+      - '5434:5432'  # Puerto local 5434 para no conflictuar
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

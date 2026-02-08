@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
-import { getDatabase } from '../db/schema';
-import type { User, Session } from '../db/schema';
+import prisma from '../db/prisma';
+import type { User } from '../db/types';
 
 const SESSION_MAX_AGE = parseInt(process.env.SESSION_MAX_AGE || '604800000'); // 7 days
 
@@ -14,16 +14,19 @@ function generateSessionToken(): string {
 /**
  * Create a new session for a user
  */
-export function createSession(userId: string): { token: string; sessionId: string } {
-  const db = getDatabase();
+export async function createSession(userId: string): Promise<{ token: string; sessionId: string }> {
   const sessionId = randomBytes(16).toString('hex');
   const token = generateSessionToken();
-  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE).toISOString();
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE);
 
-  db.prepare(`
-    INSERT INTO sessions (id, user_id, token, expires_at)
-    VALUES (?, ?, ?, ?)
-  `).run(sessionId, userId, token, expiresAt);
+  await prisma.session.create({
+    data: {
+      id: sessionId,
+      userId,
+      token,
+      expiresAt,
+    },
+  });
 
   return { token, sessionId };
 }
@@ -31,97 +34,81 @@ export function createSession(userId: string): { token: string; sessionId: strin
 /**
  * Validate a session token and return the user if valid
  */
-export function validateSession(token: string): (User & { sessionId: string }) | null {
-  const db = getDatabase();
+export async function validateSession(token: string): Promise<(User & { sessionId: string }) | null> {
+  const session = await prisma.session.findUnique({
+    where: {
+      token,
+      expiresAt: { gt: new Date() },
+    },
+    include: {
+      user: true,
+    },
+  });
 
-  const result = db.prepare(`
-    SELECT
-      s.id as session_id,
-      u.*
-    FROM sessions s
-    INNER JOIN users u ON u.id = s.user_id
-    WHERE s.token = ?
-      AND s.expires_at > datetime('now')
-      AND u.deleted_at IS NULL
-  `).get(token) as any;
-
-  if (!result) {
+  if (!session || !session.user || session.user.deletedAt !== null) {
     return null;
   }
 
   return {
-    id: result.id,
-    email: result.email,
-    password_hash: result.password_hash,
-    name: result.name,
-    role: result.role,
-    restaurant_id: result.restaurant_id,
-    created_at: result.created_at,
-    updated_at: result.updated_at,
-    deleted_at: result.deleted_at,
-    sessionId: result.session_id,
+    ...session.user,
+    sessionId: session.id,
   };
 }
 
 /**
  * Delete a session (logout)
  */
-export function deleteSession(token: string): void {
-  const db = getDatabase();
-
-  db.prepare(`
-    DELETE FROM sessions
-    WHERE token = ?
-  `).run(token);
+export async function deleteSession(token: string): Promise<void> {
+  await prisma.session.deleteMany({
+    where: { token },
+  });
 }
 
 /**
  * Delete all sessions for a user
  */
-export function deleteUserSessions(userId: string): void {
-  const db = getDatabase();
-
-  db.prepare(`
-    DELETE FROM sessions
-    WHERE user_id = ?
-  `).run(userId);
+export async function deleteUserSessions(userId: string): Promise<void> {
+  await prisma.session.deleteMany({
+    where: { userId },
+  });
 }
 
 /**
  * Refresh/extend a session's expiration
  */
-export function refreshSession(token: string): boolean {
-  const db = getDatabase();
-  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE).toISOString();
+export async function refreshSession(token: string): Promise<boolean> {
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE);
 
-  const result = db.prepare(`
-    UPDATE sessions
-    SET expires_at = ?
-    WHERE token = ?
-      AND expires_at > datetime('now')
-  `).run(expiresAt, token);
+  const result = await prisma.session.updateMany({
+    where: {
+      token,
+      expiresAt: { gt: new Date() },
+    },
+    data: {
+      expiresAt,
+    },
+  });
 
-  return result.changes > 0;
+  return result.count > 0;
 }
 
 /**
  * Clean up expired sessions (run periodically)
  */
-export function cleanupExpiredSessions(): number {
-  const db = getDatabase();
+export async function cleanupExpiredSessions(): Promise<number> {
+  const result = await prisma.session.deleteMany({
+    where: {
+      expiresAt: { lte: new Date() },
+    },
+  });
 
-  const result = db.prepare(`
-    DELETE FROM sessions
-    WHERE expires_at <= datetime('now')
-  `).run();
-
-  return result.changes;
+  return result.count;
 }
 
 /**
  * Get session from cookie (helper for middleware/server components)
  */
-export function getSessionFromCookie(cookieHeader: string | null): (User & { sessionId: string }) | null {
+export async function getSessionFromCookie(cookieHeader: string | null): Promise<(User & { sessionId: string }) | null> {
   if (!cookieHeader) {
     return null;
   }
@@ -139,5 +126,5 @@ export function getSessionFromCookie(cookieHeader: string | null): (User & { ses
     return null;
   }
 
-  return validateSession(token);
+  return await validateSession(token);
 }

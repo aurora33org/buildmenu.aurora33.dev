@@ -1,35 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
 import { createMenuItemSchema } from '@/lib/validations/menu.schema';
-import { randomUUID } from 'crypto';
+import { sanitizeInput } from '@/lib/utils/sanitize';
 
 export async function GET(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || session.role !== 'tenant_user' || !session.restaurant_id) {
+    if (!session || session.role !== 'tenant_user' || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const db = getDatabase();
+    const items = await prisma.menuItem.findMany({
+      where: {
+        restaurantId: session.restaurantId,
+        deletedAt: null
+      },
+      include: {
+        category: {
+          select: {
+            name: true,
+            displayOrder: true
+          }
+        }
+      },
+      orderBy: [
+        { category: { displayOrder: 'asc' } },
+        { displayOrder: 'asc' },
+        { createdAt: 'asc' }
+      ]
+    });
 
-    const items = db.prepare(`
-      SELECT
-        mi.*,
-        c.name as category_name
-      FROM menu_items mi
-      INNER JOIN categories c ON c.id = mi.category_id
-      WHERE mi.restaurant_id = ?
-        AND mi.deleted_at IS NULL
-      ORDER BY c.display_order ASC, mi.display_order ASC, mi.created_at ASC
-    `).all(session.restaurant_id);
+    const itemsWithCategoryName = items.map(item => ({
+      ...item,
+      category_name: item.category.name,
+      base_price: item.basePrice,
+      display_order: item.displayOrder,
+      is_visible: item.isVisible,
+      is_featured: item.isFeatured,
+      image_url: item.imageUrl,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt
+    }));
 
-    return NextResponse.json({ items });
+    return NextResponse.json({ items: itemsWithCategoryName });
 
   } catch (error) {
     console.error('List items error:', error);
@@ -43,9 +62,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
-    if (!session || session.role !== 'tenant_user' || !session.restaurant_id) {
+    if (!session || session.role !== 'tenant_user' || !session.restaurantId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -63,13 +82,15 @@ export async function POST(request: NextRequest) {
     }
 
     const data = validation.data;
-    const db = getDatabase();
 
     // Verify category belongs to user's restaurant
-    const category = db.prepare(`
-      SELECT id FROM categories
-      WHERE id = ? AND restaurant_id = ? AND deleted_at IS NULL
-    `).get(data.categoryId, session.restaurant_id);
+    const category = await prisma.category.findFirst({
+      where: {
+        id: data.categoryId,
+        restaurantId: session.restaurantId,
+        deletedAt: null
+      }
+    });
 
     if (!category) {
       return NextResponse.json(
@@ -78,38 +99,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const itemId = randomUUID();
+    // Sanitize text inputs
+    const sanitizedName = sanitizeInput(data.name);
+    const sanitizedDescription = data.description ? sanitizeInput(data.description) : null;
 
-    db.prepare(`
-      INSERT INTO menu_items (
-        id, category_id, restaurant_id, name, description,
-        base_price, display_order, is_visible, is_featured
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      itemId,
-      data.categoryId,
-      session.restaurant_id,
-      data.name,
-      data.description || null,
-      data.basePrice ?? null,
-      data.displayOrder,
-      data.isVisible ? 1 : 0,
-      data.isFeatured ? 1 : 0
-    );
-
-    const item = db.prepare(`
-      SELECT mi.*, c.name as category_name
-      FROM menu_items mi
-      INNER JOIN categories c ON c.id = mi.category_id
-      WHERE mi.id = ?
-    `).get(itemId);
+    const item = await prisma.menuItem.create({
+      data: {
+        categoryId: data.categoryId,
+        restaurantId: session.restaurantId,
+        name: sanitizedName,
+        description: sanitizedDescription,
+        basePrice: data.basePrice ?? null,
+        displayOrder: data.displayOrder,
+        isVisible: data.isVisible,
+        isFeatured: data.isFeatured
+      },
+      include: {
+        category: {
+          select: {
+            name: true
+          }
+        }
+      }
+    });
 
     console.log('[ITEM CREATED]', { name: data.name, category_id: data.categoryId });
 
     return NextResponse.json({
       success: true,
-      item,
+      item: {
+        ...item,
+        category_name: item.category.name
+      },
     }, { status: 201 });
 
   } catch (error) {

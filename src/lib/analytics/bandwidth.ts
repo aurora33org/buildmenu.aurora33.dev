@@ -1,5 +1,4 @@
-import { getDatabase } from '../db/schema';
-import { randomUUID } from 'crypto';
+import prisma from '../db/prisma';
 
 /**
  * Track bandwidth usage for a restaurant
@@ -15,33 +14,40 @@ export async function trackBandwidth(
   isUniqueVisitor: boolean = false
 ): Promise<void> {
   try {
-    const db = getDatabase();
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    // Get today's date at midnight UTC
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
 
     // Check if record exists for today
-    const existing = db.prepare(`
-      SELECT id FROM usage_metrics
-      WHERE restaurant_id = ? AND date = ?
-    `).get(restaurantId, today) as { id: string } | undefined;
+    const existing = await prisma.usageMetric.findFirst({
+      where: {
+        restaurantId: restaurantId,
+        date: today
+      },
+      select: { id: true }
+    });
 
     if (existing) {
       // Update existing record
-      db.prepare(`
-        UPDATE usage_metrics
-        SET
-          page_views = page_views + 1,
-          unique_visitors = unique_visitors + ?,
-          bandwidth_bytes = bandwidth_bytes + ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(isUniqueVisitor ? 1 : 0, bytes, existing.id);
+      await prisma.usageMetric.update({
+        where: { id: existing.id },
+        data: {
+          pageViews: { increment: 1 },
+          uniqueVisitors: { increment: isUniqueVisitor ? 1 : 0 },
+          bandwidthBytes: { increment: bytes }
+        }
+      });
     } else {
       // Create new record
-      db.prepare(`
-        INSERT INTO usage_metrics
-        (id, restaurant_id, date, page_views, unique_visitors, bandwidth_bytes)
-        VALUES (?, ?, ?, 1, ?, ?)
-      `).run(randomUUID(), restaurantId, today, isUniqueVisitor ? 1 : 0, bytes);
+      await prisma.usageMetric.create({
+        data: {
+          restaurantId: restaurantId,
+          date: today,
+          pageViews: 1,
+          uniqueVisitors: isUniqueVisitor ? 1 : 0,
+          bandwidthBytes: bytes
+        }
+      });
     }
   } catch (error) {
     console.error('[BANDWIDTH TRACKING ERROR]', error);
@@ -56,31 +62,41 @@ export async function trackBandwidth(
  * @param days - Number of days to look back (default: 30)
  * @returns Object with bandwidth statistics
  */
-export function getBandwidthStats(restaurantId: string, days: number = 30) {
-  const db = getDatabase();
+export async function getBandwidthStats(restaurantId: string, days: number = 30) {
+  const daysAgo = new Date();
+  daysAgo.setDate(daysAgo.getDate() - days);
+  daysAgo.setUTCHours(0, 0, 0, 0);
 
-  const stats = db.prepare(`
-    SELECT
-      SUM(page_views) as total_views,
-      SUM(unique_visitors) as total_unique,
-      SUM(bandwidth_bytes) as total_bytes,
-      COUNT(DISTINCT date) as days_tracked
-    FROM usage_metrics
-    WHERE restaurant_id = ?
-      AND date >= date('now', '-${days} days')
-  `).get(restaurantId) as {
-    total_views: number | null;
-    total_unique: number | null;
-    total_bytes: number | null;
-    days_tracked: number | null;
-  } | undefined;
+  const stats = await prisma.usageMetric.aggregate({
+    where: {
+      restaurantId: restaurantId,
+      date: { gte: daysAgo }
+    },
+    _sum: {
+      pageViews: true,
+      uniqueVisitors: true,
+      bandwidthBytes: true
+    },
+    _count: {
+      date: true
+    }
+  });
+
+  // Count distinct dates
+  const distinctDates = await prisma.usageMetric.groupBy({
+    by: ['date'],
+    where: {
+      restaurantId: restaurantId,
+      date: { gte: daysAgo }
+    }
+  });
 
   return {
-    totalViews: stats?.total_views || 0,
-    totalUnique: stats?.total_unique || 0,
-    totalBytes: stats?.total_bytes || 0,
-    totalMB: Math.round((stats?.total_bytes || 0) / (1024 * 1024) * 10) / 10, // Round to 1 decimal
-    daysTracked: stats?.days_tracked || 0,
+    totalViews: stats._sum.pageViews || 0,
+    totalUnique: stats._sum.uniqueVisitors || 0,
+    totalBytes: Number(stats._sum.bandwidthBytes || 0),
+    totalMB: Math.round((Number(stats._sum.bandwidthBytes || 0) / (1024 * 1024)) * 10) / 10, // Round to 1 decimal
+    daysTracked: distinctDates.length,
   };
 }
 
@@ -91,17 +107,22 @@ export function getBandwidthStats(restaurantId: string, days: number = 30) {
  * @param days - Number of days to look back (default: 7)
  * @returns Total views in the last N days
  */
-export function getViewsLastNDays(restaurantId: string, days: number = 7): number {
-  const db = getDatabase();
+export async function getViewsLastNDays(restaurantId: string, days: number = 7): Promise<number> {
+  const daysAgo = new Date();
+  daysAgo.setDate(daysAgo.getDate() - days);
+  daysAgo.setUTCHours(0, 0, 0, 0);
 
-  const result = db.prepare(`
-    SELECT SUM(page_views) as views
-    FROM usage_metrics
-    WHERE restaurant_id = ?
-      AND date >= date('now', '-${days} days')
-  `).get(restaurantId) as { views: number | null } | undefined;
+  const result = await prisma.usageMetric.aggregate({
+    where: {
+      restaurantId: restaurantId,
+      date: { gte: daysAgo }
+    },
+    _sum: {
+      pageViews: true
+    }
+  });
 
-  return result?.views || 0;
+  return result._sum.pageViews || 0;
 }
 
 /**
@@ -109,13 +130,12 @@ export function getViewsLastNDays(restaurantId: string, days: number = 7): numbe
  *
  * @returns Total views across all time
  */
-export function getTotalViewsAllRestaurants(): number {
-  const db = getDatabase();
+export async function getTotalViewsAllRestaurants(): Promise<number> {
+  const result = await prisma.usageMetric.aggregate({
+    _sum: {
+      pageViews: true
+    }
+  });
 
-  const result = db.prepare(`
-    SELECT SUM(page_views) as total
-    FROM usage_metrics
-  `).get() as { total: number | null } | undefined;
-
-  return result?.total || 0;
+  return result._sum.pageViews || 0;
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabase } from '@/lib/db/schema';
+import prisma from '@/lib/db/prisma';
 import { getSessionFromCookie } from '@/lib/auth/session';
+import { pauseTenantSchema } from '@/lib/validations/admin.schema';
 
 export async function POST(
   request: NextRequest,
@@ -11,7 +12,7 @@ export async function POST(
 
     // Verify user is authenticated and is super_admin
     const cookieHeader = request.headers.get('cookie');
-    const session = getSessionFromCookie(cookieHeader);
+    const session = await getSessionFromCookie(cookieHeader);
 
     if (!session) {
       return NextResponse.json(
@@ -20,10 +21,11 @@ export async function POST(
       );
     }
 
-    const db = getDatabase();
-
     // Verify user is super_admin
-    const user = db.prepare('SELECT role FROM users WHERE id = ?').get(session.id) as { role: string } | undefined;
+    const user = await prisma.user.findUnique({
+      where: { id: session.id },
+      select: { role: true }
+    });
 
     if (!user || user.role !== 'super_admin') {
       return NextResponse.json(
@@ -33,9 +35,17 @@ export async function POST(
     }
 
     // Get user to find restaurant_id
-    const tenant = db.prepare(`
-      SELECT id, restaurant_id FROM users WHERE id = ? AND role = 'tenant_user' AND deleted_at IS NULL
-    `).get(id) as { id: string; restaurant_id: string | null } | undefined;
+    const tenant = await prisma.user.findFirst({
+      where: {
+        id: id,
+        role: 'tenant_user',
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        restaurantId: true
+      }
+    });
 
     if (!tenant) {
       return NextResponse.json(
@@ -44,29 +54,38 @@ export async function POST(
       );
     }
 
-    if (!tenant.restaurant_id) {
+    if (!tenant.restaurantId) {
       return NextResponse.json(
         { error: 'Tenant has not completed onboarding' },
         { status: 400 }
       );
     }
 
-    // Get optional reason from request body
+    // Get and validate optional reason from request body
     const body = await request.json().catch(() => ({}));
-    const reason = body.reason || 'Paused by admin';
+    const validation = pauseTenantSchema.safeParse(body);
+
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validation.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const reason = validation.data.reason || 'Paused by admin';
 
     // Pause the restaurant
-    db.prepare(`
-      UPDATE restaurants
-      SET paused_at = CURRENT_TIMESTAMP,
-          paused_reason = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(reason, tenant.restaurant_id);
+    await prisma.restaurant.update({
+      where: { id: tenant.restaurantId },
+      data: {
+        pausedAt: new Date(),
+        pausedReason: reason
+      }
+    });
 
     console.log('[TENANT PAUSED]', {
       tenantId: id,
-      restaurantId: tenant.restaurant_id,
+      restaurantId: tenant.restaurantId,
       reason,
     });
 
