@@ -40,7 +40,7 @@ Multi-tenant SaaS platform for creating and managing digital restaurant menus. B
 - ISR for public menus (1-hour cache)
 - Real-time bandwidth tracking
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Local)
 
 ### 1. Install Dependencies
 
@@ -50,37 +50,26 @@ npm install
 
 ### 2. Setup PostgreSQL Database
 
-Start PostgreSQL with Docker:
-
 ```bash
 npm run docker:up
 ```
 
 ### 3. Configure Environment
 
-Copy `.env.example` to `.env.local`:
-
 ```bash
 cp .env.example .env.local
 ```
 
-Default configuration works with Docker setup. Update if needed.
+Default configuration works with Docker setup.
 
-### 4. Run Database Migrations
+### 4. Run Migrations & Seed
 
 ```bash
 npm run db:migrate:dev
-```
-
-### 5. Seed Initial Data
-
-```bash
 npm run db:seed
 ```
 
-This creates a super admin user with credentials below.
-
-### 6. Start Development Server
+### 5. Start Development Server
 
 ```bash
 npm run dev
@@ -95,6 +84,61 @@ Open [http://localhost:3000](http://localhost:3000)
 - Password: `admin123`
 
 ⚠️ **Change these credentials in production!**
+
+---
+
+## 🚢 Deployment Options
+
+The project supports two production deployment options. See [DEPLOYMENT.md](./DEPLOYMENT.md) for full details.
+
+### Option 1: Dokploy + PostgreSQL (Self-hosted) ⭐ Recommended
+
+Full control over your infrastructure. Uses Nixpacks for automatic Next.js build detection.
+
+**Quick overview:**
+1. Create a PostgreSQL service in Dokploy
+2. Create a new App in Dokploy → connect GitHub repo → Nixpacks
+3. Configure environment variables (see below)
+4. Deploy — migrations run automatically on start
+
+**Environment variables for Dokploy:**
+```bash
+DATABASE_URL=postgresql://USER:PASSWORD@postgres:5432/DATABASE
+DIRECT_URL=postgresql://USER:PASSWORD@postgres:5432/DATABASE
+SESSION_SECRET=<generate with: openssl rand -base64 32>
+SUPER_ADMIN_EMAIL=admin@yourdomain.com
+SUPER_ADMIN_PASSWORD=YourSecurePassword123!
+NEXT_PUBLIC_APP_URL=https://your-dokploy-domain.com
+```
+
+> **Note:** In Dokploy, `DATABASE_URL` and `DIRECT_URL` are the same (no pgbouncer needed).
+
+### Option 2: Vercel + Supabase (Managed)
+
+Serverless deployment with managed PostgreSQL.
+
+**Quick overview:**
+1. Create a PostgreSQL project in Supabase
+2. Import repo in Vercel → configure environment variables → Deploy
+3. Run migrations locally pointing to Supabase: `./scripts/deploy-to-production.sh`
+
+**Environment variables for Vercel + Supabase:**
+```bash
+# Transaction mode (runtime) - port 6543 with pgbouncer
+DATABASE_URL=postgresql://postgres.xxxx:PASSWORD@aws-0-region.pooler.supabase.com:6543/postgres?pgbouncer=true
+
+# Direct connection (migrations) - port 5432 without pgbouncer
+DIRECT_URL=postgresql://postgres:PASSWORD@db.xxxx.supabase.co:5432/postgres
+
+SESSION_SECRET=<generate with: openssl rand -base64 32>
+SUPER_ADMIN_EMAIL=admin@yourdomain.com
+SUPER_ADMIN_PASSWORD=YourSecurePassword123!
+NEXT_PUBLIC_APP_URL=https://your-project.vercel.app
+```
+
+> **Note:** Vercel+Supabase requires TWO different URLs. Supabase uses pgbouncer connection pooling.
+
+---
 
 ## 📁 Project Structure
 
@@ -138,8 +182,12 @@ menu-create/
 ├── prisma/                       # Database
 │   ├── schema.prisma             # Prisma schema
 │   └── seed.ts                   # Database seeding
-├── public/                       # Static assets
-└── docker-compose.yml            # PostgreSQL container
+├── scripts/                      # Deployment scripts
+│   └── deploy-to-production.sh  # Vercel+Supabase helper
+├── nixpacks.toml                 # Dokploy/Nixpacks build config
+├── docker-compose.yml            # Local PostgreSQL container
+├── DEPLOYMENT.md                 # Full deployment guide
+└── DEPLOYMENT-CHECKLIST.md       # Post-deploy verification
 ```
 
 ## 🔧 Available Scripts
@@ -147,29 +195,23 @@ menu-create/
 ### Development
 - `npm run dev` - Start development server (http://localhost:3000)
 - `npm run build` - Build for production
-- `npm start` - Start production server
+- `npm start` - Start production server (runs migrations first)
 - `npm run lint` - Run ESLint
 
 ### Database (PostgreSQL + Prisma)
-- `npm run docker:up` - Start PostgreSQL container
-- `npm run docker:down` - Stop PostgreSQL container
-- `npm run db:migrate:dev` - Run database migrations (development)
-- `npm run db:migrate:deploy` - Run database migrations (production)
+- `npm run docker:up` - Start local PostgreSQL container
+- `npm run docker:down` - Stop local PostgreSQL container
+- `npm run db:migrate:dev` - Run migrations (development)
+- `npm run db:migrate:deploy` - Run migrations (production)
 - `npm run db:seed` - Seed database with super admin user
 - `npm run db:studio` - Open Prisma Studio (database GUI)
 - `npm run db:reset` - Reset database (⚠️ destroys all data)
 
-### Database Management
-```bash
-# Generate Prisma client after schema changes
-npx prisma generate
-
-# Create a new migration
-npx prisma migrate dev --name migration_name
-
-# View database in browser
-npx prisma studio
-```
+### Deployment
+- `npm run deploy:migrate` - Run production migrations
+- `npm run deploy:seed` - Seed production database
+- `npm run deploy:setup` - Run migrate + seed (Vercel+Supabase)
+- `./scripts/deploy-to-production.sh` - Interactive deployment script
 
 ## 🎯 Development Status
 

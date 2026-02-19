@@ -1,0 +1,17 @@
+# Nixpacks configuration for Dokploy deployment
+# https://nixpacks.com/docs/configuration/file
+
+[variables]
+NODE_ENV = "production"
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "openssl"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm run start"
