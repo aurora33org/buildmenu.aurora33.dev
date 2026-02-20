@@ -53,37 +53,17 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const stagingUrl = '${{ steps.get-url.outputs.staging_url }}';
-            const comment = `🚀 **Staging Deployment Ready!**
-
-📍 **Staging URL**: [https://${stagingUrl}](https://${stagingUrl})
-
-✅ This PR has been automatically deployed to staging with a shared staging database.
-
-**Test your changes**: [Open Staging](https://${stagingUrl}/login)
-
-**Login with**:
-- Email: staging@test.com
-- Password: staging123
-
----
-⏱️ Deployment timestamp: ${new Date().toISOString()}`;
+            const comment = '🚀 **Staging Deployment Ready!**\n\n' +
+              '📍 **Staging URL**: https://' + stagingUrl + '\n\n' +
+              '✅ This PR has been automatically deployed to staging with a shared staging database.\n\n' +
+              '**Test your changes**: https://' + stagingUrl + '/login\n\n' +
+              '**Login with**:\n' +
+              '- Email: staging@test.com\n' +
+              '- Password: staging123';
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: comment
-            })
-
-      - name: Update PR description
-        if: github.event.action == 'opened'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.rest.pulls.update({
-              pull_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: context.payload.pull_request.body + '\n\n---\n✅ Auto-deployed to staging'
             })
