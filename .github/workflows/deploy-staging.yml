@@ -25,7 +25,9 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Login to Railway
-        run: railway login --token $RAILWAY_TOKEN
+        run: |
+          mkdir -p ~/.railway
+          echo "$RAILWAY_TOKEN" > ~/.railway/token
 
       - name: Link to Railway project
         run: |
