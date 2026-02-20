@@ -37,7 +37,7 @@ jobs:
           echo "$RAILWAY_TOKEN" > ~/.railway/token
 
       - name: Link to Railway project
-        run: railway link --project $RAILWAY_PROJECT_ID --environmentName staging
+        run: railway link --project $RAILWAY_PROJECT_ID --environment staging
 
       - name: Deploy to Railway Staging
         run: railway up --detach
