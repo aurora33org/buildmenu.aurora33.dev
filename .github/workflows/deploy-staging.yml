@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -59,11 +61,11 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const stagingUrl = '${{ steps.get-url.outputs.staging_url }}';
-            const comment = '🚀 **Staging Deployment Ready!**\n\n' +
-              '📍 **Staging URL**: https://' + stagingUrl + '\n\n' +
-              '✅ This PR has been automatically deployed to staging with a shared staging database.\n\n' +
-              '**Test your changes**: https://' + stagingUrl + '/login\n\n' +
-              '**Login with**:\n' +
+            const comment = 'Staging Deployment Ready!\n\n' +
+              'Staging URL: https://' + stagingUrl + '\n\n' +
+              'This PR has been automatically deployed to staging with a shared staging database.\n\n' +
+              'Test your changes: https://' + stagingUrl + '/login\n\n' +
+              'Login with:\n' +
               '- Email: staging@test.com\n' +
               '- Password: staging123';
 
