@@ -4,6 +4,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+env:
+  RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  RAILWAY_PROJECT_ID: d402b81f-7ab2-4bd8-9571-73fd1b75ddd6
+
 jobs:
   deploy-staging:
     runs-on: ubuntu-latest
@@ -17,25 +21,46 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
 
-      - name: Build project
-        run: npm run build
+      - name: Setup Railway authentication
+        run: |
+          mkdir -p ~/.railway
+          echo "$RAILWAY_TOKEN" > ~/.railway/token
+
+      - name: Link to Railway project
+        run: railway link --project $RAILWAY_PROJECT_ID --environmentName staging
+
+      - name: Deploy to Railway Staging
+        run: railway up --detach
+
+      - name: Wait for deployment
+        run: sleep 10
+
+      - name: Get Staging Domain
+        id: get-url
+        run: |
+          DOMAIN=$(railway domain --json 2>/dev/null | jq -r '.[0].domain // empty')
+          if [ -z "$DOMAIN" ]; then
+            DOMAIN="buildmenu-staging.up.railway.app"
+          fi
+          echo "staging_url=$DOMAIN" >> $GITHUB_OUTPUT
+          echo "Staging URL: $DOMAIN"
 
       - name: Comment PR with Staging URL
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const stagingUrl = '${{ steps.get-url.outputs.staging_url }}';
             const comment = '🚀 **Staging Deployment Ready!**\n\n' +
-              '📍 **Staging URL**: https://buildmenu-staging.up.railway.app\n\n' +
-              '✅ This PR has been automatically built and is ready for staging deployment.\n\n' +
-              '**Test your changes**: https://buildmenu-staging.up.railway.app/login\n\n' +
+              '📍 **Staging URL**: https://' + stagingUrl + '\n\n' +
+              '✅ This PR has been automatically deployed to staging with a shared staging database.\n\n' +
+              '**Test your changes**: https://' + stagingUrl + '/login\n\n' +
               '**Login with**:\n' +
               '- Email: staging@test.com\n' +
-              '- Password: staging123\n\n' +
-              '**Note**: Manual deployment to Railway staging required. Contact DevOps to complete the deployment.';
+              '- Password: staging123';
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
