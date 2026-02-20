@@ -1,317 +1,250 @@
-# 🚀 Deployment Guide: Vercel + Supabase
+# 🚀 Deployment Guide
 
-Esta guía te ayudará a desplegar Menu Create en Vercel con base de datos PostgreSQL en Supabase.
+This project supports two production deployment options:
 
----
-
-## 📋 Pre-requisitos
-
-- ✅ Cuenta en [Vercel](https://vercel.com)
-- ✅ Cuenta en [Supabase](https://supabase.com)
-- ✅ Git repository con el código (GitHub, GitLab, o Bitbucket)
-
----
-
-## PASO 1: Configurar Supabase (Base de Datos)
-
-### 1.1 Crear Proyecto
-
-1. Ve a [https://supabase.com/dashboard](https://supabase.com/dashboard)
-2. Click en **"New Project"**
-3. Configura:
-   - **Name**: `menu-create-test` (o el nombre que prefieras)
-   - **Database Password**: Genera una contraseña segura y **guárdala** (la necesitarás)
-   - **Region**: Selecciona la región más cercana a tus usuarios
-   - **Pricing Plan**: Free (suficiente para testing)
-4. Click en **"Create new project"**
-5. Espera 2-3 minutos mientras Supabase provisiona tu base de datos
-
-### 1.2 Obtener Connection Strings
-
-1. En tu proyecto de Supabase, ve a **Settings** (⚙️ ícono en la sidebar) → **Database**
-2. Busca la sección **"Connection string"**
-3. Necesitas **DOS URLs diferentes**:
-
-#### **DATABASE_URL** (Para la aplicación - con connection pooling):
-```
-Selecciona: "Transaction" mode
-Copia el string que se ve así:
-postgresql://postgres.xxxxxxxxxxxx:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true
-```
-
-#### **DIRECT_URL** (Para migrations - conexión directa):
-```
-Selecciona: "Session" mode
-Copia el string y cámbialo de puerto 6543 a 5432 y QUITA el parámetro pgbouncer:
-postgresql://postgres.xxxxxxxxxxxx:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
-```
-
-**IMPORTANTE**: Reemplaza `[YOUR-PASSWORD]` con tu contraseña real en ambas URLs.
-
-### 1.3 Guardar las URLs
-
-Guarda ambas URLs en un lugar seguro (las necesitarás en el siguiente paso).
+| | Dokploy + PostgreSQL | Vercel + Supabase |
+|-|---------------------|-------------------|
+| **Type** | Self-hosted | Managed/Serverless |
+| **DB** | PostgreSQL service in Dokploy | Supabase (managed PostgreSQL) |
+| **Build** | Nixpacks (auto-detect) | Vercel (auto-detect) |
+| **Migrations** | Auto on startup | Manual (run locally) |
+| **Cost** | Server cost only | Free tier available |
+| **Control** | Full | Limited |
 
 ---
 
-## PASO 2: Configurar Vercel
+## Option 1: Dokploy + PostgreSQL (Self-hosted)
 
-### 2.1 Importar Proyecto
+### Prerequisites
+- Dokploy instance running
+- GitHub/GitLab repo with the code
 
-1. Ve a [https://vercel.com/new](https://vercel.com/new)
-2. Selecciona tu repositorio Git (GitHub/GitLab/Bitbucket)
-3. Click en **"Import"**
+### Step 1: Create PostgreSQL Service in Dokploy
 
-### 2.2 Configurar Variables de Entorno
+1. In Dokploy → **Databases** → **Create Database**
+2. Select **PostgreSQL**
+3. Configure:
+   - **Name**: `menu-create-db` (or any name)
+   - **Database**: `menu_create`
+   - **User**: `menu_user`
+   - **Password**: generate a secure one
+4. Click **Create** and wait for it to start
+5. Copy the **internal connection string** (e.g., `postgresql://menu_user:password@menu-create-db:5432/menu_create`)
 
-**ANTES de hacer el deploy**, configura estas variables de entorno:
+> **Important:** Use the **internal hostname** (service name), not `localhost` or external IP.
+
+### Step 2: Create the App in Dokploy
+
+1. In Dokploy → **Applications** → **Create Application**
+2. **Source**: Connect your GitHub/GitLab repo
+3. **Build Type**: Nixpacks (auto-detects Next.js)
+4. **Branch**: `main` (or your production branch)
+
+### Step 3: Configure Environment Variables
+
+In your Dokploy app → **Environment** tab, add:
 
 ```bash
-# 1. Database URLs (de Supabase)
-DATABASE_URL=postgresql://postgres.xxxxxxxxxxxx:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true
-DIRECT_URL=postgresql://postgres.xxxxxxxxxxxx:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+# Database - same URL for both (no pgbouncer in Dokploy)
+DATABASE_URL=postgresql://menu_user:password@menu-create-db:5432/menu_create
+DIRECT_URL=postgresql://menu_user:password@menu-create-db:5432/menu_create
 
-# 2. Session Secret (genera uno nuevo)
-SESSION_SECRET=tu-secret-super-seguro-de-al-menos-32-caracteres-aqui
+# Session secret - generate with: openssl rand -base64 32
+SESSION_SECRET=your-random-32-char-secret-here
 
-# 3. Application URLs
-NEXT_PUBLIC_APP_URL=https://tu-dominio.vercel.app
+# App URL
+NEXT_PUBLIC_APP_URL=https://your-dokploy-domain.com
 NEXT_PUBLIC_APP_NAME=Menu Create
 
-# 4. Super Admin Credentials (para seed)
-SUPER_ADMIN_EMAIL=admin@tudominio.com
-SUPER_ADMIN_PASSWORD=TuPasswordSeguro123!
+# Super Admin credentials for seeding
+SUPER_ADMIN_EMAIL=admin@yourdomain.com
+SUPER_ADMIN_PASSWORD=YourSecurePassword123!
 
-# 5. Optional Features
+# Optional
 ENABLE_ANALYTICS=true
 SESSION_MAX_AGE=604800000
 ```
 
-**Cómo agregar variables en Vercel:**
-1. En la página de configuración del proyecto, busca **"Environment Variables"**
-2. Agrega cada variable: **Key** → **Value** → **Add**
-3. Asegúrate de seleccionar **Production**, **Preview**, y **Development**
+> **Note:** `DATABASE_URL` and `DIRECT_URL` are the **same** in Dokploy — no pgbouncer needed.
 
-### 2.3 Deploy
+### Step 4: Deploy
 
-1. Una vez configuradas todas las variables, click en **"Deploy"**
-2. Espera 2-5 minutos mientras Vercel construye tu aplicación
-3. **IMPORTANTE**: El primer deploy fallará o no tendrá datos porque la base de datos está vacía
+1. Click **Deploy** in Dokploy
+2. Nixpacks will automatically:
+   - Detect Next.js
+   - Install dependencies (`npm ci`)
+   - Generate Prisma Client (`postinstall`)
+   - Build the app (`npm run build`)
+3. On startup, `npm start` will:
+   - Run `prisma migrate deploy` (applies all migrations)
+   - Start the Next.js server
 
----
+### Step 5: Seed the Database
 
-## PASO 3: Ejecutar Migrations y Seed
-
-Ahora necesitas correr las migraciones y el seed en la base de datos de producción.
-
-### Opción A: Desde tu computadora local
-
-```bash
-# 1. Crea un archivo .env.production en la raíz del proyecto
-cat > .env.production << 'EOF'
-DATABASE_URL="postgresql://postgres.xxxxxxxxxxxx:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
-DIRECT_URL="postgresql://postgres.xxxxxxxxxxxx:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
-SUPER_ADMIN_EMAIL="admin@tudominio.com"
-SUPER_ADMIN_PASSWORD="TuPasswordSeguro123!"
-EOF
-
-# 2. Ejecutar migrations
-npx dotenv-cli -e .env.production -- npx prisma migrate deploy
-
-# 3. Generar Prisma Client
-npx dotenv-cli -e .env.production -- npx prisma generate
-
-# 4. Ejecutar seed
-npx dotenv-cli -e .env.production -- npx tsx prisma/seed.ts
-
-# 5. (Opcional) Verificar en Prisma Studio
-npx dotenv-cli -e .env.production -- npx prisma studio
-```
-
-### Opción B: Desde Vercel CLI
+After the first successful deployment, run the seed from Dokploy's console or terminal:
 
 ```bash
-# 1. Instalar Vercel CLI
-npm install -g vercel
-
-# 2. Login
-vercel login
-
-# 3. Link al proyecto
-vercel link
-
-# 4. Pull environment variables
-vercel env pull .env.production
-
-# 5. Ejecutar migrations
-npx dotenv-cli -e .env.production -- npx prisma migrate deploy
-
-# 6. Ejecutar seed
-npx dotenv-cli -e .env.production -- npx tsx prisma/seed.ts
+# In Dokploy → your app → Console
+npm run deploy:seed
 ```
+
+This creates the initial super admin with the credentials you set in env vars.
+
+### Step 6: Verify
+
+1. Open your Dokploy app URL
+2. Navigate to `/login`
+3. Login with `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD`
+4. You should see the admin dashboard
 
 ---
 
-## PASO 4: Verificar el Deployment
+## Option 2: Vercel + Supabase (Managed)
 
-### 4.1 Acceder a la aplicación
+### Prerequisites
+- Account on [Vercel](https://vercel.com)
+- Account on [Supabase](https://supabase.com)
+- GitHub/GitLab repo with the code
 
-1. Ve a tu URL de Vercel: `https://tu-proyecto.vercel.app`
-2. Deberías ver la página de login
+### Step 1: Create Supabase Project
 
-### 4.2 Login con Super Admin
+1. Go to [https://supabase.com/dashboard](https://supabase.com/dashboard)
+2. Click **New Project**
+3. Configure:
+   - **Name**: `menu-create`
+   - **Database Password**: generate and save it
+   - **Region**: closest to your users
+4. Wait 2-3 minutes for provisioning
 
-Usa las credenciales que configuraste:
+### Step 2: Get Connection Strings from Supabase
+
+Go to **Settings → Database → Connection string**
+
+You need **two different URLs**:
+
+#### DATABASE_URL (Transaction mode — for runtime):
 ```
-Email: admin@tudominio.com
-Password: TuPasswordSeguro123!
+Select "Transaction" in the dropdown
+Copy URL → port 6543, with ?pgbouncer=true
+
+postgresql://postgres.xxxx:PASSWORD@aws-0-region.pooler.supabase.com:6543/postgres?pgbouncer=true
 ```
 
-### 4.3 Verificar funcionalidad
+#### DIRECT_URL (Session mode — for migrations):
+```
+Select "Session" in the dropdown
+Copy URL → port 5432, without ?pgbouncer=true
 
-- ✅ Login funciona
-- ✅ Dashboard admin carga
-- ✅ Puedes crear un tenant de prueba
-- ✅ Menú público es accesible
+postgresql://postgres:PASSWORD@db.xxxx.supabase.co:5432/postgres
+```
 
----
+> **Important:** Replace `PASSWORD` with your actual database password in both URLs.
 
-## PASO 5: Configuraciones Post-Deploy
+### Step 3: Import Project in Vercel
 
-### 5.1 Configurar Dominio Custom (Opcional)
+1. Go to [https://vercel.com/new](https://vercel.com/new)
+2. Import your GitHub/GitLab repo
+3. **Before deploying**, add environment variables:
 
-1. En Vercel, ve a **Settings** → **Domains**
-2. Agrega tu dominio custom
-3. Configura los DNS según las instrucciones de Vercel
-4. Actualiza `NEXT_PUBLIC_APP_URL` con tu nuevo dominio
-
-### 5.2 Monitoreo
-
-**Logs en Vercel:**
-- Ve a tu proyecto → **Deployments** → Click en el deployment → **Runtime Logs**
-
-**Database en Supabase:**
-- Ve a **Database** → **Tables** para ver tus datos
-- Ve a **Database** → **Logs** para ver queries
-
-### 5.3 Backups
-
-Supabase hace backups automáticos en el plan Free:
-- **Point-in-time recovery**: No disponible en Free
-- **Daily backups**: Sí, retenidos por 7 días
-
-Para backups manuales:
 ```bash
-# Conectarte a Supabase con pg_dump
-pg_dump "postgresql://postgres.xxxxxxxxxxxx:[PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres" > backup.sql
+DATABASE_URL=postgresql://postgres.xxxx:PASSWORD@aws-0-region.pooler.supabase.com:6543/postgres?pgbouncer=true
+DIRECT_URL=postgresql://postgres:PASSWORD@db.xxxx.supabase.co:5432/postgres
+SESSION_SECRET=<run: openssl rand -base64 32>
+NEXT_PUBLIC_APP_URL=https://your-project.vercel.app
+NEXT_PUBLIC_APP_NAME=Menu Create
+SUPER_ADMIN_EMAIL=admin@yourdomain.com
+SUPER_ADMIN_PASSWORD=YourSecurePassword123!
+ENABLE_ANALYTICS=true
+SESSION_MAX_AGE=604800000
 ```
 
----
+4. Click **Deploy**
 
-## 🔧 Troubleshooting
+### Step 4: Run Migrations (from your local machine)
 
-### Error: "Can't reach database server"
+Vercel does NOT auto-run migrations on deploy. You must run them manually once:
 
-**Causa**: Prisma no puede conectarse a Supabase.
+```bash
+# 1. Create local production env file
+cp .env.production.example .env.production
 
-**Solución**:
-1. Verifica que `DATABASE_URL` y `DIRECT_URL` estén correctamente configuradas
-2. Asegúrate de que la contraseña no tenga caracteres especiales sin escapar
-3. Verifica que estás usando el modo correcto (Transaction vs Session)
+# 2. Edit .env.production with your Supabase credentials
 
-### Error: "Prisma Client not generated"
+# 3. Run interactive deployment script
+./scripts/deploy-to-production.sh
+```
 
-**Causa**: El Prisma Client no se generó durante el build.
+Or manually:
+```bash
+# Run migrations
+npx dotenv -e .env.production -- npx prisma migrate deploy
 
-**Solución**:
-1. Verifica que el build command en Vercel sea: `npm run build`
-2. Asegúrate de que `postinstall` script esté en `package.json`:
-   ```json
-   "scripts": {
-     "postinstall": "prisma generate"
-   }
-   ```
+# Seed the database
+npx dotenv -e .env.production -- npx tsx prisma/seed.ts
+```
 
-### Error: "Table does not exist"
+### Step 5: Verify
 
-**Causa**: Las migraciones no se ejecutaron.
-
-**Solución**:
-1. Ejecuta las migraciones manualmente (ver Paso 3)
-2. Verifica en Supabase que las tablas existan: **Database** → **Tables**
-
-### Deployment lento o fallido
-
-**Causa**: Build timeout o límites de Vercel.
-
-**Solución**:
-1. Verifica que no estés en el límite de builds del plan Free
-2. Optimiza `node_modules` si es muy grande
-3. Considera upgrade a plan Pro si es necesario
+1. Open your Vercel URL
+2. Navigate to `/login`
+3. Login with your super admin credentials
 
 ---
 
-## 📊 Monitoreo y Performance
+## 🔑 Key Differences
 
-### Supabase Dashboard
+### DATABASE_URL vs DIRECT_URL
 
-- **Database Size**: Settings → Usage
-- **Connections**: Database → Connection Pooling
-- **Query Performance**: Database → Logs
+| Environment | DATABASE_URL | DIRECT_URL |
+|-------------|-------------|------------|
+| **Local** | `localhost:5434` | same |
+| **Dokploy** | `service-name:5432` | same |
+| **Supabase** | `pooler:6543?pgbouncer=true` | `db:5432` (direct) |
 
-### Vercel Analytics
+- **Dokploy**: Both URLs are the same — direct PostgreSQL connection, no pooling needed
+- **Supabase**: Two different URLs — `DATABASE_URL` uses pgbouncer pooling for runtime performance, `DIRECT_URL` bypasses pooling for migrations
 
-- **Response Time**: Analytics tab
-- **Error Rate**: Functions → Errors
-- **Build Time**: Deployments tab
+### Migrations
 
----
-
-## 🔒 Seguridad en Producción
-
-### ✅ Checklist de Seguridad
-
-- [ ] `SESSION_SECRET` es un string aleatorio de 32+ caracteres
-- [ ] `SUPER_ADMIN_PASSWORD` es fuerte y único
-- [ ] Credenciales de BD no están en el código (solo en env vars)
-- [ ] HTTPS está habilitado (Vercel lo hace por defecto)
-- [ ] Variables de entorno están solo en Production (no en repo)
-
-### Rotar Credenciales
-
-Si necesitas cambiar la contraseña de la BD:
-1. En Supabase: Settings → Database → Reset database password
-2. Actualiza `DATABASE_URL` y `DIRECT_URL` en Vercel
-3. Redeploy la aplicación
+| Environment | How migrations run |
+|-------------|-------------------|
+| **Local** | `npm run db:migrate:dev` (manual) |
+| **Dokploy** | Automatically on every `npm start` |
+| **Vercel** | Manually via `./scripts/deploy-to-production.sh` |
 
 ---
 
-## 🚀 CI/CD Automático
+## 🛠️ Troubleshooting
 
-Vercel despliega automáticamente en cada push:
+### Dokploy: "Connection refused" to database
+- Check that the PostgreSQL service is running in Dokploy
+- Verify you're using the **internal hostname** (service name), not `localhost`
+- Make sure both services are in the same Dokploy network/project
 
-- **Push a `main`**: Deploy a Production
-- **Push a otras branches**: Deploy a Preview
-- **Pull Requests**: Deploy a Preview con URL única
+### Dokploy: Migrations fail on startup
+- Check the app logs in Dokploy for the exact error
+- Verify `DATABASE_URL` is correctly set
+- Ensure the PostgreSQL service started before the app
 
-Para desactivar auto-deploy:
-1. Vercel → Settings → Git
-2. Configura branch rules
+### Vercel: Build fails with DATABASE_URL error
+- This is expected on first deploy before env vars are set
+- The build is designed to handle missing `DATABASE_URL` gracefully
+- Set env vars in Vercel dashboard and redeploy
+
+### Vercel: "Table does not exist"
+- Migrations haven't been run yet
+- Run `./scripts/deploy-to-production.sh` from your local machine
+
+### Supabase: "Can't reach database"
+- Verify both `DATABASE_URL` (port 6543) and `DIRECT_URL` (port 5432) are correct
+- Check that the password doesn't contain unescaped special characters
+- Verify the Supabase project is active (not paused on free tier)
 
 ---
 
-## 📞 Soporte
+## 📋 Related Documentation
 
-### Recursos:
-- [Vercel Docs](https://vercel.com/docs)
-- [Supabase Docs](https://supabase.com/docs)
-- [Prisma Docs](https://www.prisma.io/docs)
-- [Next.js Deployment](https://nextjs.org/docs/deployment)
-
-### Problemas comunes:
-- [Prisma + Supabase Guide](https://supabase.com/docs/guides/integrations/prisma)
-- [Vercel + PostgreSQL](https://vercel.com/guides/using-databases-with-vercel)
-
----
-
-**¡Listo!** Tu aplicación está desplegada en producción 🎉
+- [DEPLOYMENT-CHECKLIST.md](./DEPLOYMENT-CHECKLIST.md) - Post-deploy verification checklist
+- [.env.production.example](./.env.production.example) - Vercel+Supabase env template
+- [.env.example](./.env.example) - All environment variables with comments
+- [README.md](./README.md) - Project overview and quick start
