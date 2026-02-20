@@ -4,6 +4,11 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened]
 
+permissions:
+  pull-requests: write
+  issues: write
+  contents: read
+
 env:
   RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
   RAILWAY_PROJECT_ID: d402b81f-7ab2-4bd8-9571-73fd1b75ddd6
